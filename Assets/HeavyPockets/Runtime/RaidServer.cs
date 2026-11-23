@@ -41,6 +41,8 @@ namespace HeavyPockets
             public bool Entered, Queued;
             public bool AtBase;
             public byte PouchLevel = 1;
+            public bool AcceptsStyledPoses;
+            public int Style = RunnerAppearance.DefaultStyle;
             public readonly HashSet<ulong> VisibleActors = new HashSet<ulong>();
             public float IngressCredits = 64f;
             public float MoveCredits = 12f;
@@ -108,6 +110,8 @@ namespace HeavyPockets
                 player.ActionCredits = previous.ActionCredits;
                 player.LastTransfer = previous.LastTransfer;
                 player.PouchLevel = previous.PouchLevel;
+                player.Style = previous.Style;
+                player.AcceptsStyledPoses = previous.AcceptsStyledPoses;
             }
             players[id] = player;
             loot.IssueKit(id, player.PouchLevel);
@@ -149,7 +153,8 @@ namespace HeavyPockets
 
         private static RaidEvent Pose(Player player) => new RaidEvent
         {
-            Kind = RaidEventKind.Pose, Actor = player.Id, Position = player.Position, Yaw = player.Yaw, Motion = player.Motion
+            Kind = RaidEventKind.Pose, Actor = player.Id, Position = player.Position, Yaw = player.Yaw,
+            Motion = player.Motion, Style = player.Style
         };
 
         private void SendInventory(Player player, RaidEventKind kind)
@@ -215,6 +220,16 @@ namespace HeavyPockets
             // The round acknowledgement arrives on the same ordered channel as input.
             // Commands sent before the client saw the new start cannot affect this raid.
             if (!player.Entered && !player.Exited) return;
+            if (command == RaidCommand.SetStyle)
+            {
+                if (bytes.Length != 3) return;
+                int style = bytes[1] | (bytes[2] << 8);
+                if (RunnerAppearance.Normalize(style) != style) return;
+                // Older clients never send a style, and keep receiving the original 31-byte poses.
+                player.AcceptsStyledPoses = true;
+                player.Style = style;
+                return;
+            }
             if (command == RaidCommand.Move)
             {
                 if (!player.Exited && player.MoveCredits >= 1f)
@@ -294,11 +309,10 @@ namespace HeavyPockets
                 (bytes[17] == (byte)RaidCameraMode.FirstPerson && sample != RaidCameraBoom.CenterSample))
                 return;
             player.Direction = Vector2.ClampMagnitude(direction, 1f);
-            player.Buttons = (MoveButtons)bytes[23];
-            if ((player.Buttons & (MoveButtons.Jump | MoveButtons.Crouch)) == MoveButtons.Jump &&
-                !player.Motion.Airborne && player.Motion.Crouch < .1f)
-                player.Motion.VerticalSpeed = RaidLocomotion.JumpImpulse;
             player.Yaw = Mathf.Repeat(yaw, 360f);
+            MoveButtons next = (MoveButtons)bytes[23];
+            player.Motion.Press(player.Position, player.Velocity, player.Yaw, player.Buttons, next, player.AcceptsStyledPoses);
+            player.Buttons = next;
             player.Pitch = pitch;
             player.Aspect = aspect;
             var mode = (RaidCameraMode)bytes[17];
@@ -413,7 +427,7 @@ namespace HeavyPockets
             {
                 if (actor.Exited)
                     continue;
-                byte[] pose = null;
+                byte[] pose = null, legacyPose = null;
                 foreach (Player recipient in players.Values)
                 {
                     if (recipient.Exited)
@@ -432,8 +446,10 @@ namespace HeavyPockets
                     }
                     if (send)
                     {
-                        if (pose == null) pose = RaidWire.Encode(Pose(actor));
-                        RaidWire.Send(net, recipient.Id, RaidWire.Events, pose, audit);
+                        byte[] packet = recipient.AcceptsStyledPoses
+                            ? (pose ??= RaidWire.Encode(Pose(actor)))
+                            : (legacyPose ??= RaidWire.Encode(Pose(actor), false));
+                        RaidWire.Send(net, recipient.Id, RaidWire.Events, packet, audit);
                     }
                 }
             }

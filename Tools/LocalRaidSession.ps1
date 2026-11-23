@@ -1,3 +1,9 @@
+function Get-LocalRaidBuild([string]$root) {
+    $build = Join-Path $root 'Build/Development'
+    if (Test-Path -LiteralPath $build -PathType Container) { return $build }
+    return (Join-Path $root 'Build')
+}
+
 # Ephemeral local issuer. No certificate-store installation, network service or persistent key.
 function New-LocalRaidSession {
     $rng = [Security.Cryptography.RandomNumberGenerator]::Create()

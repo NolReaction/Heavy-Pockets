@@ -113,8 +113,8 @@ namespace HeavyPockets
         {
             // PowerShell can include command text in an error. Only return known, non-sensitive diagnoses.
             string message = errors.Status == TaskStatus.RanToCompletion ? errors.Result.Trim() : "";
-            if (message.StartsWith("Missing Build/Server/HeavyPocketsServer.exe", StringComparison.Ordinal))
-                return "Missing Build/Server/HeavyPocketsServer.exe. Build the Windows dedicated server from the Heavy Pockets menu.";
+            if (message.StartsWith("Missing local server.", StringComparison.Ordinal))
+                return "Build the Windows dedicated server from the Heavy Pockets menu.";
             if (message == "Could not prepare the encrypted local server session.")
                 return message;
             var logName = Regex.Match(message, @"HeavyPockets-Editor-[a-fA-F0-9]{32}\.log$");

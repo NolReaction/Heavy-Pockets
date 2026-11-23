@@ -2,16 +2,27 @@ using UnityEngine;
 
 namespace HeavyPockets
 {
-    internal enum RaidScreen { Play, Menu, Receipt, Base }
-    internal enum RaidMenuAction { Resume, Bag, Base, Join, CancelQueue, Quit, Pouch1, Pouch2, Pouch3, Pouch4 }
+    internal enum RaidScreen { Play, Menu, Wardrobe, Receipt, Base }
+    internal enum RaidMenuAction { Resume, Bag, Wardrobe, Base, Join, CancelQueue, Quit, Pouch1, Pouch2, Pouch3, Pouch4 }
 
     public sealed partial class RaidClient
     {
         private byte basePouchLevel = 1;
+        private bool InPauseMenu => screen == RaidScreen.Menu || screen == RaidScreen.Wardrobe;
+
+        private void LeaveWardrobe(bool apply)
+        {
+            if (screen != RaidScreen.Wardrobe) return;
+            if (apply) SaveStyle(hud.WardrobeStyle);
+            hud.CloseWardrobe();
+            screen = RaidScreen.Menu;
+            hud.ResetMenuInput();
+        }
 
         internal void EscapePressed()
         {
             if (disconnected || !HasOwnPose) return;
+            if (screen == RaidScreen.Wardrobe) { LeaveWardrobe(false); return; }
             if (screen == RaidScreen.Receipt) { UseMenu(RaidMenuAction.Base); return; }
             if (screen == RaidScreen.Menu) { UseMenu(RaidMenuAction.Resume); return; }
             if (screen != RaidScreen.Play || extracted) return;
@@ -37,6 +48,10 @@ namespace HeavyPockets
             }
             switch (action)
             {
+                case RaidMenuAction.Wardrobe when screen == RaidScreen.Menu:
+                    hud.OpenWardrobe(SelectedStyle, view != null, LeaveWardrobe);
+                    screen = RaidScreen.Wardrobe;
+                    break;
                 case RaidMenuAction.Resume when screen == RaidScreen.Menu:
                     screen = RaidScreen.Play;
                     if (!ScriptedInput && Application.isFocused && view != null) CaptureCursor();
@@ -69,6 +84,11 @@ namespace HeavyPockets
         internal bool ProbeCanJoin => screen == RaidScreen.Base && !queued && !changingQueue;
         internal uint ProbeRound => round;
         internal bool ProbeMenuClick(RaidMenuAction action) => ScriptedInput && hud.ProbeMenuClick(InventoryState(), action);
+        internal int ProbeWardrobeStyle => hud.WardrobeStyle;
+        internal void ProbeWardrobeKey(int rowStep, int change, bool enter = false)
+        {
+            if (ScriptedInput && screen == RaidScreen.Wardrobe) hud.WardrobeKey(rowStep, change, enter);
+        }
 #endif
     }
 }

@@ -11,8 +11,9 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'LocalRaidSession.ps1')
 $security = New-LocalRaidSession
 $project = Split-Path -Parent $PSScriptRoot
-$serverExe = Join-Path $project 'Build/Server/HeavyPocketsServer.exe'
-$clientExe = Join-Path $project 'Build/Client/HeavyPockets.exe'
+$build = Get-LocalRaidBuild $project
+$serverExe = Join-Path $build 'Server/HeavyPocketsServer.exe'
+$clientExe = Join-Path $build 'Client/HeavyPockets.exe'
 foreach ($file in $serverExe, $clientExe) {
     if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Build missing: $file" }
 }

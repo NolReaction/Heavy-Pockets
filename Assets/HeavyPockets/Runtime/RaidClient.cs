@@ -12,6 +12,7 @@ namespace HeavyPockets
         {
             public Transform Model;
             public FreightRunnerGait Gait;
+            public int Style;
             public readonly PoseTrack Track = new PoseTrack();
         }
 
@@ -31,10 +32,12 @@ namespace HeavyPockets
                 var motion = new RaidLocomotion
                 {
                     Crouch = Mathf.Lerp(from.Motion.Crouch, to.Motion.Crouch, t),
-                    Sprinting = t < .5f ? from.Motion.Sprinting : to.Motion.Sprinting
+                    Sprinting = t < .5f ? from.Motion.Sprinting : to.Motion.Sprinting,
+                    Sliding = t < .5f ? from.Motion.Sliding : to.Motion.Sliding
                 };
                 if (from.Motion.Airborne || to.Motion.Airborne)
                     SampleJump(from.Motion, to.Motion, duration, t, ref motion);
+                if (motion.Airborne) motion.Sliding = false;
                 return new RenderPose
                 {
                     Time = clock, Position = Vector2.Lerp(from.Position, to.Position, t),
@@ -168,6 +171,22 @@ namespace HeavyPockets
         public bool HasOwnPose { get; private set; }
         public Vector2 OwnPosition { get; private set; }
         public float OwnYaw { get; private set; }
+        private const string AppearancePreference = "HeavyPockets.RunnerStyle.v1";
+        internal int SelectedStyle { get; private set; }
+
+        internal void SaveStyle(int style)
+        {
+            style = RunnerAppearance.Normalize(style);
+            if (style == SelectedStyle) return;
+            SelectedStyle = style;
+            if (!ScriptedInput)
+            {
+                PlayerPrefs.SetInt(AppearancePreference, style);
+                PlayerPrefs.Save();
+            }
+            if (ownModel != null) RunnerAppearance.Apply(ownModel.gameObject, style);
+            Link?.SetStyle(style);
+        }
 
         public void Initialize(NetworkManager manager, string auditPath)
         {
@@ -175,6 +194,8 @@ namespace HeavyPockets
             Application.runInBackground = true;
             ScriptedInput = (Debug.isDebugBuild || Application.isEditor)
                 && Array.Exists(Environment.GetCommandLineArgs(), arg => arg.Equals("-probeRole", StringComparison.OrdinalIgnoreCase));
+            SelectedStyle = ScriptedInput ? RunnerAppearance.DefaultStyle :
+                RunnerAppearance.Normalize(PlayerPrefs.GetInt(AppearancePreference, RunnerAppearance.DefaultStyle));
             Link = new RaidClientLink(manager, auditPath);
             Link.Received += Receive;
             manager.OnClientDisconnectCallback += OnDisconnected;
@@ -268,7 +289,7 @@ namespace HeavyPockets
                             yaw = OwnPosition.y < 0f ? 76f : -109f;
                             pitch = OwnPosition.y < 0f ? 2f : 24f;
                             displayPosition = OwnPosition;
-                            ownModel = scenery.InstantiatePlayer(e.Actor, new Vector3(e.Position.x, 0, e.Position.y), yaw);
+                            ownModel = scenery.InstantiatePlayer(e.Actor, new Vector3(e.Position.x, 0, e.Position.y), yaw, SelectedStyle);
                             ownGait = ownModel.GetComponent<FreightRunnerGait>();
                             UpdateCamera(true);
                             if (captureOnSpawn && !ScriptedInput && Application.isFocused) CaptureCursor();
@@ -282,11 +303,16 @@ namespace HeavyPockets
                         bool spawned = !runners.TryGetValue(e.Actor, out Runner runner);
                         if (spawned)
                         {
-                            Transform model = scenery.InstantiatePlayer(e.Actor, target, e.Yaw);
-                            runner = new Runner { Model = model, Gait = model.GetComponent<FreightRunnerGait>() };
+                            Transform model = scenery.InstantiatePlayer(e.Actor, target, e.Yaw, e.Style);
+                            runner = new Runner { Model = model, Gait = model.GetComponent<FreightRunnerGait>(), Style = e.Style };
                             model.gameObject.SetActive(true);
                             ObserveRunnerStart(runner, target, e.Yaw);
                             runners.Add(e.Actor, runner);
+                        }
+                        else if (runner.Style != e.Style)
+                        {
+                            RunnerAppearance.Apply(runner.Model.gameObject, e.Style);
+                            runner.Style = e.Style;
                         }
                         runner.Track.Push(e, spawned);
                     }
@@ -329,6 +355,7 @@ namespace HeavyPockets
                     exitSeconds = e.Seconds;
                     break;
                 case RaidEventKind.Result:
+                    hud?.CloseWardrobe();
                     gearMoves.Reset();
                     extracted = true;
                     screen = RaidScreen.Receipt;
@@ -369,6 +396,7 @@ namespace HeavyPockets
 
         private void OnDisconnected(ulong id)
         {
+            hud?.CloseWardrobe();
             disconnected = true;
             ClearGear();
             HideInventory(false);
@@ -379,8 +407,10 @@ namespace HeavyPockets
         private void StartRound(uint nextRound)
         {
             if (nextRound == round) return;
+            hud?.CloseWardrobe();
             captureOnSpawn = round != 0;
             round = nextRound;
+            Link.SetStyle(SelectedStyle);
             screen = RaidScreen.Play;
             bagFromMenu = closeRequested = queued = changingQueue = extracted = false;
             HasOwnPose = false;
@@ -420,15 +450,15 @@ namespace HeavyPockets
                 return;
             UpdateViewport();
             shoulderPhase = RaidCameraBoom.AdvanceShoulder(shoulderPhase, CameraMode, Time.unscaledDeltaTime);
-            if (!extracted && (ScriptedInput || screen == RaidScreen.Menu) &&
+            if (!extracted && (ScriptedInput || InPauseMenu) &&
                 (pendingProbeView || (Time.unscaledTime >= nextSend &&
                 lastShoulderSample != RaidCameraBoom.SampleShoulder(shoulderPhase, CameraMode))))
             {
                 pendingProbeView = false;
-                bool moving = ScriptedInput && screen != RaidScreen.Menu;
+                bool moving = ScriptedInput && !InPauseMenu;
                 SendMovement(moving ? lastProbeDirection : Vector2.zero, moving ? probeButtons : MoveButtons.None);
             }
-            if (extracted || screen == RaidScreen.Menu)
+            if (extracted || InPauseMenu)
             {
                 if (!ScriptedInput && Application.isFocused)
                 {
@@ -437,7 +467,12 @@ namespace HeavyPockets
                     {
                         int step = Input.GetKeyDown(KeyCode.DownArrow) ? 1 : Input.GetKeyDown(KeyCode.UpArrow) ? -1 : 0;
                         bool enter = Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
-                        if (enter || step != 0) hud.MenuKey(InventoryState(), step, enter);
+                        if (screen == RaidScreen.Wardrobe)
+                        {
+                            int side = Input.GetKeyDown(KeyCode.RightArrow) ? 1 : Input.GetKeyDown(KeyCode.LeftArrow) ? -1 : 0;
+                            hud.WardrobeKey(step, side, enter);
+                        }
+                        else if (enter || step != 0) hud.MenuKey(InventoryState(), step, enter);
                     }
                 }
                 if (extracted) return;
@@ -455,7 +490,7 @@ namespace HeavyPockets
                 runner.Model.position = new Vector3(pose.Position.x, pose.Motion.Height, pose.Position.y);
                 runner.Gait.SetLookHeading(pose.Yaw);
                 runner.Gait.SetLocomotion(pose.Motion.Crouch, pose.Motion.Sprinting,
-                    pose.Motion.Airborne, pose.Motion.VerticalSpeed);
+                    pose.Motion.Airborne, pose.Motion.VerticalSpeed, pose.Motion.Sliding);
             }
         }
 
@@ -505,7 +540,8 @@ namespace HeavyPockets
             view.transform.SetPositionAndRotation(camera, look);
             ownModel.position = new Vector3(displayPosition.x, displayHeight, displayPosition.y);
             ownGait.SetLookHeading(ScriptedInput ? pose.Yaw : yaw, snap);
-            ownGait.SetLocomotion(displayCrouch, pose.Motion.Sprinting, pose.Motion.Airborne, pose.Motion.VerticalSpeed);
+            ownGait.SetLocomotion(displayCrouch, pose.Motion.Sprinting, pose.Motion.Airborne,
+                pose.Motion.VerticalSpeed, pose.Motion.Sliding);
             bool showModel = IsThirdPerson && boomLength > 0.55f;
             if (ownModel.gameObject.activeSelf != showModel) ownModel.gameObject.SetActive(showModel);
         }
@@ -615,7 +651,8 @@ namespace HeavyPockets
                 ((Cursor.lockState == CursorLockMode.Locked) || inventoryOpen);
             if (!control) jumpPending = false;
             else if (Input.GetKeyDown(KeyCode.Space)) jumpPending = true;
-            if (Time.unscaledTime >= nextSend)
+            bool crouchPressed = control && (Input.GetKeyDown(KeyCode.LeftControl) || Input.GetKeyDown(KeyCode.RightControl));
+            if (crouchPressed || jumpPending || Time.unscaledTime >= nextSend)
             {
                 var keys = new Vector2(
                     (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f),
@@ -625,7 +662,7 @@ namespace HeavyPockets
                 if (control)
                 {
                     if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) buttons |= MoveButtons.Sprint;
-                    if (Input.GetKey(KeyCode.C)) buttons |= MoveButtons.Crouch;
+                    if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) buttons |= MoveButtons.Crouch;
                     if (jumpPending) buttons |= MoveButtons.Jump;
                 }
                 SendMovement(direction, buttons);
@@ -742,6 +779,7 @@ namespace HeavyPockets
 
         private void OnDestroy()
         {
+            hud?.CloseWardrobe();
             scenery?.Dispose();
             if (Manager != null)
                 Manager.OnClientDisconnectCallback -= OnDisconnected;

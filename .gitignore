@@ -37,3 +37,6 @@ Thumbs.db
 *.keystore
 /[Aa]ssets/[Ss]treaming[Aa]ssets/EOS/
 /[Aa]ssets/[Ss]treaming[Aa]ssets/EOS.meta
+# Licensed sprint is bundled in the playable build and kept local in the authoring project.
+/Assets/HeavyPockets/Resources/RunnerPrivate/
+/Assets/HeavyPockets/Resources/RunnerPrivate.meta

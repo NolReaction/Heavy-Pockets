@@ -10,12 +10,12 @@ try {
         throw $failure
     }
     $root = Split-Path -Parent $PSScriptRoot
-    $exe = Join-Path $root 'Build/Server/HeavyPocketsServer.exe'
+    . (Join-Path $PSScriptRoot 'LocalRaidSession.ps1')
+    $exe = Join-Path (Get-LocalRaidBuild $root) 'Server/HeavyPocketsServer.exe'
     if (!(Test-Path -LiteralPath $exe -PathType Leaf)) {
-        $failure = 'Missing Build/Server/HeavyPocketsServer.exe. Build the Windows dedicated server from the Heavy Pockets menu or restore Build/Server from Releases/Heavy-Pockets-Movement-Windows.zip.'
+        $failure = 'Missing local server. Build the Windows dedicated server from the Heavy Pockets menu.'
         throw $failure
     }
-    . (Join-Path $PSScriptRoot 'LocalRaidSession.ps1')
 
     Add-Type -TypeDefinition @'
 using System;

@@ -27,6 +27,7 @@ $manifest = Get-Content -Raw -LiteralPath (Join-Path $root 'Packages/manifest.js
 $installed = $manifest.dependencies.'com.playeveryware.eos'
 $buildPath = Join-Path $root 'Build'
 if ($Protected) { $buildPath = Join-Path $buildPath 'Protected' }
+else { $buildPath = Join-Path $buildPath 'Development' }
 [void][IO.Directory]::CreateDirectory($buildPath)
 $project = $root
 $package = $null

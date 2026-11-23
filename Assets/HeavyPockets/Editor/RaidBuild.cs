@@ -39,7 +39,7 @@ namespace HeavyPockets.Editor
                 WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
             };
             System.Diagnostics.Process.Start(start)?.Dispose();
-            Debug.Log($"Started local {target} build. See Build/{target}-build.log.");
+            Debug.Log($"Started local {target} build. See Build/Development/{target}-build.log.");
         }
 
         // Invoked only inside the protected build script's isolated Unity project.
@@ -48,7 +48,7 @@ namespace HeavyPockets.Editor
 
         private static void Build(bool server, bool protectedBuild)
         {
-            string output = "Build";
+            string output = "Build/Development";
             string[] args = Environment.GetCommandLineArgs();
             int index = Array.IndexOf(args, "-hpBuildOutput");
             if (index >= 0)

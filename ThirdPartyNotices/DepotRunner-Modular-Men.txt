@@ -1,0 +1,20 @@
+Depot Runner character
+
+The character geometry is adapted from Quaternius's Ultimate Modular Men Pack
+(Worker, Punk, Farmer, Swat, Casual and Casual2), February 2022.
+Source: https://quaternius.com/packs/ultimatemodularcharacters.html
+GLB conversions: https://quaternius.trebeljahr.com/modular_men_pack
+License: Creative Commons CC0 1.0 Universal
+https://creativecommons.org/publicdomain/zero/1.0/
+
+The rest skeleton is from the Universal Base Characters Standard kit by
+Quaternius, also released under Creative Commons CC0 1.0 Universal.
+https://quaternius.com/packs/universalbasecharacters.html
+
+Heavy Pockets fits the modular meshes to this skeleton, weights the toes,
+separates head and hair options, sculpts a second jaw, adds eyes, lips and
+garment details, and uses an original harbor workwear palette.
+ArtSource/DepotRunner.blend contains the fitted
+meshes and material slots. The numbered mesh variants for hair, face,
+upper body, trousers and footwear share one skeleton. Matching Leg/Boot
+indices form a pair at the trouser hem.

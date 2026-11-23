@@ -4,8 +4,9 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'LocalRaidSession.ps1')
 $root = Split-Path -Parent $PSScriptRoot
 $security = New-LocalRaidSession
-$server = Join-Path $root 'Build/Server/HeavyPocketsServer.exe'
-$client = Join-Path $root 'Build/Client/HeavyPockets.exe'
+$build = Get-LocalRaidBuild $root
+$server = Join-Path $build 'Server/HeavyPocketsServer.exe'
+$client = Join-Path $build 'Client/HeavyPockets.exe'
 foreach ($file in $server,$client) {
     if (!(Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing $file. Run Tools/Build-Raid.ps1 first." }
 }
