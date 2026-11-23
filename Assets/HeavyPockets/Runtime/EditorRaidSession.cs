@@ -1,4 +1,4 @@
-#if UNITY_EDITOR_WIN && !HEAVY_POCKETS_EOS && !UNITY_SERVER && !HEAVY_POCKETS_SERVER
+#if (UNITY_EDITOR_WIN || UNITY_EDITOR_OSX) && !HEAVY_POCKETS_EOS && !UNITY_SERVER && !HEAVY_POCKETS_SERVER
 using System;
 using System.Collections;
 using System.Diagnostics;
@@ -27,14 +27,26 @@ namespace HeavyPockets
         internal EditorRaidSession()
         {
             string project = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-            string script = Path.Combine(project, "Tools", "Start-EditorRaid.ps1");
+#if UNITY_EDITOR_OSX
+            const string launcher = "Tools/Start-MacRaid.py";
+            const string executable = "/usr/bin/python3";
+            const string arguments = launcher + " --editor";
+            if (!File.Exists(executable))
+                throw new FileNotFoundException("Python 3 is required for macOS local play. Install the Xcode Command Line Tools.");
+#else
+            const string launcher = "Tools/Start-EditorRaid.ps1";
+            string executable = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe");
+            string arguments = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" +
+                Path.Combine(project, launcher) + "\"";
+#endif
+            string script = Path.Combine(project, launcher);
             if (!File.Exists(script))
                 throw new FileNotFoundException("The editor raid launcher is missing.", script);
 
             helper = Process.Start(new ProcessStartInfo
             {
-                FileName = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"),
-                Arguments = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + script + "\"",
+                FileName = executable,
+                Arguments = arguments,
                 WorkingDirectory = project,
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -111,10 +123,14 @@ namespace HeavyPockets
 
         private string StartupError()
         {
-            // PowerShell can include command text in an error. Only return known, non-sensitive diagnoses.
+            // Report only known, non-sensitive launcher errors.
             string message = errors.Status == TaskStatus.RanToCompletion ? errors.Result.Trim() : "";
             if (message.StartsWith("Missing local server.", StringComparison.Ordinal))
+#if UNITY_EDITOR_OSX
+                return "Build the macOS dedicated server from Heavy Pockets > Build macOS dedicated server.";
+#else
                 return "Build the Windows dedicated server from the Heavy Pockets menu.";
+#endif
             if (message == "Could not prepare the encrypted local server session.")
                 return message;
             var logName = Regex.Match(message, @"HeavyPockets-Editor-[a-fA-F0-9]{32}\.log$");

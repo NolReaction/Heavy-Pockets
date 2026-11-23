@@ -19,7 +19,11 @@ namespace HeavyPockets
             string value = Environment.GetEnvironmentVariable(name);
             Environment.SetEnvironmentVariable(name, null);
             if (string.IsNullOrEmpty(value))
+#if UNITY_EDITOR_OSX || (!UNITY_EDITOR && UNITY_STANDALONE_OSX)
+                throw new InvalidOperationException("No local raid credentials. Enter Play mode in Unity or use Play-Mac.command.");
+#else
                 throw new InvalidOperationException("No local raid credentials. Start Heavy Pockets using Play.cmd.");
+#endif
             return value;
         }
 

@@ -8,7 +8,7 @@ namespace HeavyPockets
     public sealed class RaidBootstrap : MonoBehaviour
     {
         private NetworkManager network;
-#if UNITY_EDITOR_WIN && !HEAVY_POCKETS_EOS && !UNITY_SERVER && !HEAVY_POCKETS_SERVER
+#if (UNITY_EDITOR_WIN || UNITY_EDITOR_OSX) && !HEAVY_POCKETS_EOS && !UNITY_SERVER && !HEAVY_POCKETS_SERVER
         private EditorRaidSession editorSession;
         private bool startingEditorSession;
 #endif
@@ -76,7 +76,7 @@ namespace HeavyPockets
                     return;
                 }
 #endif
-#if UNITY_EDITOR_WIN
+#if UNITY_EDITOR_WIN || UNITY_EDITOR_OSX
                 if (!Application.isBatchMode && Environment.GetEnvironmentVariable("HP_RAID_CA") == null &&
                     Environment.GetEnvironmentVariable("HP_RAID_TICKET") == null)
                 {
@@ -135,7 +135,7 @@ namespace HeavyPockets
         }
 #endif
 
-#if UNITY_EDITOR_WIN && !HEAVY_POCKETS_EOS && !UNITY_SERVER && !HEAVY_POCKETS_SERVER
+#if (UNITY_EDITOR_WIN || UNITY_EDITOR_OSX) && !HEAVY_POCKETS_EOS && !UNITY_SERVER && !HEAVY_POCKETS_SERVER
         private void OnGUI()
         {
             if (startingEditorSession)
