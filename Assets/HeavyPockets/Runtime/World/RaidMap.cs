@@ -7,9 +7,9 @@ namespace HeavyPockets
     public static class RaidMap
     {
         public static readonly Vector2 Crate = new Vector2(0f, 0.8f);
-        public static readonly Vector2 Exit = new Vector2(5.4f, 4f);
-        public const float RoomX = 8f;
-        public const float RoomZ = 6f;
+        public static readonly Vector2 Exit = new Vector2(47f, 35f);
+        public const float RoomX = 72f;
+        public const float RoomZ = 56f;
         public const float WallX = 2f;
         public const float WallZ = 0.15f;
         public const float CrateX = 0.55f;
@@ -37,7 +37,7 @@ namespace HeavyPockets
 
         public static Vector2 Spawn(int slot)
         {
-            return slot % 2 == 0 ? new Vector2(0f, -1f) : new Vector2(1.15f, 1.25f);
+            return slot % 2 == 0 ? new Vector2(-4f, -9f) : new Vector2(1.15f, 1.25f);
         }
 
         public static Vector2 Move(Vector2 from, Vector2 delta, float capsuleTop = 0f)
@@ -59,8 +59,17 @@ namespace HeavyPockets
 
         private static bool Blocked(Vector2 p)
         {
-            return InBox(p, Vector2.zero, WallX + PlayerRadius, WallZ + PlayerRadius)
-                || InBox(p, Crate, CrateX + PlayerRadius, CrateZ + PlayerRadius);
+            if (InBox(p, Vector2.zero, WallX + PlayerRadius, WallZ + PlayerRadius)
+                || InBox(p, Crate, CrateX + PlayerRadius, CrateZ + PlayerRadius)) return true;
+
+            foreach (OutdoorSolid solid in OutdoorLayout.Solids)
+            {
+                Vector3 center = solid.Bounds.center, half = solid.Bounds.extents;
+                float dx = Mathf.Max(Mathf.Abs(p.x - center.x) - half.x, 0f);
+                float dz = Mathf.Max(Mathf.Abs(p.y - center.z) - half.z, 0f);
+                if (dx * dx + dz * dz < PlayerRadius * PlayerRadius) return true;
+            }
+            return false;
         }
 
         private static bool BlockedAtHeight(Vector2 p, float capsuleTop) => Blocked(p) ||
@@ -107,7 +116,8 @@ namespace HeavyPockets
             Vector2 direction = to - from;
             bool crossesWall = ClipAxis(from.x, direction.x, WallX, ref first, ref last)
                 && ClipAxis(from.y, direction.y, WallZ, ref first, ref last);
-            return !crossesWall;
+            if (crossesWall) return false;
+            return ClearYardSegment(RaidCameraBoom.Eye(from), new Vector3(direction.x, 0, direction.y));
         }
 
         // Keep the eye-to-crate interaction rule separate from camera-to-mesh replication.
@@ -119,7 +129,15 @@ namespace HeavyPockets
                 && !Intersects(WearStrip, from, ray, 1f, out _)
                 && !Intersects(FaceDetails, from, ray, 1f, out _)
                 && !Intersects(Placard, from, ray, 1f, out _)
-                && !Intersects(CargoCase, from, ray, 1f, out _);
+                && !Intersects(CargoCase, from, ray, 1f, out _)
+                && ClearYardSegment(from, ray);
+        }
+
+        private static bool ClearYardSegment(Vector3 from, Vector3 ray)
+        {
+            foreach (Bounds box in OutdoorLayout.Occluders)
+                if (Intersects(box, from, ray, 1f, out _)) return false;
+            return true;
         }
 
         internal static bool Intersects(Bounds box, Vector3 origin, Vector3 direction, float length, out float first)

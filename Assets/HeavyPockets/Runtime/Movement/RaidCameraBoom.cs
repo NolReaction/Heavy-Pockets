@@ -39,7 +39,7 @@ namespace HeavyPockets
     {
         private const float Clearance = 0.16f;
         internal const float MaxPitch = 82f;
-        internal const float VerticalFov = 76f, NearClip = .045f, FarClip = 80f;
+        internal const float VerticalFov = 76f, NearClip = .045f, FarClip = 650f;
         internal const float MinAspect = .25f, MaxAspect = 3.6f;
         internal const float ShoulderSeconds = .34f;
         internal const byte CenterSample = 127, LastSample = 254;
@@ -102,13 +102,19 @@ namespace HeavyPockets
 
         internal static float AvailableLength(Vector3 eye, Vector3 direction, float length)
         {
-            // Reserve room for skirting, structural steel and fixtures inside the shell.
-            float xLimit = RaidMap.RoomX - 0.26f, zLimit = RaidMap.RoomZ - 0.28f;
+            float xLimit = RaidMap.RoomX - Clearance, zLimit = RaidMap.RoomZ - Clearance;
             length = LimitAxis(eye.x, direction.x, -xLimit, xLimit, length);
             length = LimitAxis(eye.z, direction.z, -zLimit, zLimit, length);
-            length = LimitAxis(eye.y, direction.y, Clearance + 0.04f, 4.00f, length);
+            if (direction.y < -0.00001f)
+                length = Mathf.Min(length, (Clearance + .04f - eye.y) / direction.y);
             if (RaidMap.Intersects(Partition, eye, direction, length, out float wall)) length = wall;
             if (RaidMap.Intersects(Cargo, eye, direction, length, out float crate)) length = crate;
+            foreach (Bounds box in OutdoorLayout.Occluders)
+            {
+                Bounds padded = box;
+                padded.Expand(2f * Clearance);
+                if (RaidMap.Intersects(padded, eye, direction, length, out float contact)) length = contact;
+            }
             return Mathf.Max(0f, length);
         }
 

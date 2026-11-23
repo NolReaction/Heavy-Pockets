@@ -20,7 +20,7 @@ Shader "HeavyPockets/DepotSurface"
         sampler2D _Grain;
         half4 _Color, _Finish;
         float4 _GrainScale;
-        half _Glow, _Wear;
+        half _Glow, _Wear, _HarborPoster, _HarborDusk;
 
         struct Input
         {
@@ -63,7 +63,27 @@ Shader "HeavyPockets/DepotSurface"
             o.Smoothness = saturate(_Finish.y + pigment * _Finish.x * 0.09h + abrasion * 0.08h);
             o.Specular = _Finish.z * lerp(half3(1,1,1), _Color.rgb, 0.18h) + abrasion * 0.035h;
             o.Occlusion = 1 - lowDust * 0.11h;
-            o.Emission = _Glow * _Color.rgb;
+            if (_HarborPoster > .5h && _Glow < .2h)
+            {
+                // In the printed treatment, colored ink sits in broad shapes.
+                // Screen-frequency filtering keeps the world-space hatch stable at range.
+                half tone = dot(_Color.rgb, half3(.28h,.53h,.19h));
+                half3 ink = half3(.10h,.245h,.26h);
+                half3 mid = lerp(half3(.24h,.52h,.51h), half3(.77h,.40h,.20h),
+                                 smoothstep(-.025h,.09h,_Color.r - _Color.b));
+                half3 paper = half3(.94h,.84h,.60h);
+                half3 printColor = lerp(ink, mid, smoothstep(.15h,.47h,tone));
+                printColor = lerp(printColor, paper, smoothstep(.52h,.85h,tone));
+                float phase = (p.x + p.z) * 4.5 + p.y * 7.5;
+                float footprint = max(fwidth(phase), .001);
+                float stripe = (1 - smoothstep(.10,.10 + footprint, abs(frac(phase) - .5)))
+                             * (1 - smoothstep(.16,.42,footprint));
+                half shade = 1 - smoothstep(-.4,.6,dot(n,normalize(half3(.45,.7,.5))));
+                o.Albedo = lerp(printColor, ink, .34h * stripe * shade) * (1 + pigment * .055h);
+                o.Smoothness *= .26h;
+                o.Specular *= .18h;
+            }
+            o.Emission = _Glow * _Color.rgb * (1 + _HarborDusk * 1.4h);
             o.Alpha = 1;
 
             half2 sx = side.gb * 2 - 1, sy = top.gb * 2 - 1, sz = front.gb * 2 - 1;

@@ -205,7 +205,7 @@ namespace HeavyPockets
             hud.SelectGear = SelectEquipment;
             if (Application.isBatchMode || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
                 return;
-            var stage = new GameObject("Freight bay");
+            var stage = new GameObject("Freight harbor");
             stage.transform.SetParent(transform, false);
             scenery = new RaidScenery(stage.transform);
             var eye = new GameObject("Runner camera");
@@ -216,8 +216,7 @@ namespace HeavyPockets
             view.nearClipPlane = RaidCameraBoom.NearClip;
             view.farClipPlane = RaidCameraBoom.FarClip;
             UpdateViewport();
-            view.clearFlags = CameraClearFlags.SolidColor;
-            view.backgroundColor = new Color32(157, 181, 178, 255);
+            view.clearFlags = CameraClearFlags.Skybox;
             eye.AddComponent<AudioListener>();
             eye.transform.position = new Vector3(0, 1.58f, -1f);
         }
@@ -286,7 +285,7 @@ namespace HeavyPockets
                         ownTrack.Push(e, !HasOwnPose);
                         if (!HasOwnPose && view != null)
                         {
-                            yaw = OwnPosition.y < 0f ? 76f : -109f;
+                            yaw = OwnPosition.y < 0f ? 51f : -109f;
                             pitch = OwnPosition.y < 0f ? 2f : 24f;
                             displayPosition = OwnPosition;
                             ownModel = scenery.InstantiatePlayer(e.Actor, new Vector3(e.Position.x, 0, e.Position.y), yaw, SelectedStyle);

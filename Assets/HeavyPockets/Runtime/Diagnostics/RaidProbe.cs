@@ -170,7 +170,8 @@ namespace HeavyPockets
             Application.Quit(2);
         }
 
-        private IEnumerator Walk(Vector2 target, float? heading = null, float elevation = 3f, float maxInput = 1f)
+        private IEnumerator Walk(Vector2 target, float? heading = null, float elevation = 3f, float maxInput = 1f,
+            bool sprint = false)
         {
             Phase("walk to " + target);
             float finalYaw = heading ?? 0f;
@@ -180,7 +181,8 @@ namespace HeavyPockets
                 Vector2 delta = target - position;
                 Vector2 direction = Vector2.ClampMagnitude(delta, maxInput);
                 finalYaw = heading ?? Mathf.Atan2(direction.x, direction.y) * Mathf.Rad2Deg;
-                Client.SetProbeMotion(direction, finalYaw, elevation);
+                Client.SetProbeMotion(direction, finalYaw, elevation, sprint && delta.sqrMagnitude > 4f
+                    ? MoveButtons.Sprint : MoveButtons.None);
                 yield return new WaitForSecondsRealtime(0.08f);
             }
             Client.SetProbeMotion(Vector2.zero, finalYaw, elevation);
@@ -815,6 +817,8 @@ namespace HeavyPockets
                     Fail("Unexpected blocked-side spawn " + position);
                     yield break;
                 }
+                // Stand within reach on the hidden side before testing the partition.
+                yield return Walk(new Vector2(0f, -1f), 0f);
                 Phase("wall denial");
                 link.Open();
                 yield return new WaitUntil(() => blocked);
@@ -869,7 +873,8 @@ namespace HeavyPockets
             }
             // Give each camera its own position inside the same extraction pad.
             float side = role == "A" ? -0.51f : 0.51f;
-            yield return Walk(RaidMap.Exit + new Vector2(side, 0f));
+            yield return Walk(new Vector2(RaidMap.Exit.x + side, 5f), sprint: true);
+            yield return Walk(RaidMap.Exit + new Vector2(side, 0f), sprint: true);
             Phase("three-second evacuation");
             yield return new WaitUntil(() => result != null);
             if (Contents(result) != Marker(role + ".inventory"))

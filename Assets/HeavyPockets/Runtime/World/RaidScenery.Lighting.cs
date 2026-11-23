@@ -73,38 +73,6 @@ namespace HeavyPockets
             surfaces.Clear();
         }
 
-        private void BuildLighting()
-        {
-            RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color32(132, 155, 176, 255);
-            RenderSettings.ambientEquatorColor = new Color32(103, 120, 132, 255);
-            RenderSettings.ambientGroundColor = new Color32(90, 83, 73, 255);
-            RenderSettings.ambientIntensity = 1f;
-            RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color32(104, 124, 139, 255);
-            RenderSettings.fogStartDistance = 9f;
-            RenderSettings.fogEndDistance = 45f;
-
-            // Focus the existing shadow map on this 16-metre room.
-            QualitySettings.shadowDistance = Mathf.Min(QualitySettings.shadowDistance, 26f);
-            var key = NewLight("East clerestory daylight", LightType.Directional,
-                new Color32(205, 225, 251, 255), 1.02f);
-            key.transform.localRotation = Quaternion.LookRotation(new Vector3(-1, -0.46f, 0.26f));
-            key.shadows = LightShadows.Soft;
-            key.shadowStrength = 0.78f;
-            key.shadowBias = 0.035f;
-            key.shadowNormalBias = 0.22f;
-            RenderSettings.sun = key;
-
-            var dockLamp = NewLight("Service pendant", LightType.Point, new Color32(255, 188, 120, 255), 2.45f);
-            dockLamp.transform.localPosition = new Vector3(-3.6f, 4.07f, 0.3f);
-            dockLamp.range = 9f;
-            var gateLamp = NewLight("Shutter pendant", LightType.Point, new Color32(255, 203, 151, 255), 2.10f);
-            gateLamp.transform.localPosition = new Vector3(4.8f, 4.07f, 3f);
-            gateLamp.range = 8.3f;
-        }
-
         private Light NewLight(string name, LightType type, Color color, float intensity)
         {
             var fixture = new GameObject(name);

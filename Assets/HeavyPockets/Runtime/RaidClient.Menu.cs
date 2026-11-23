@@ -3,7 +3,8 @@ using UnityEngine;
 namespace HeavyPockets
 {
     internal enum RaidScreen { Play, Menu, Wardrobe, Receipt, Base }
-    internal enum RaidMenuAction { Resume, Bag, Wardrobe, Base, Join, CancelQueue, Quit, Pouch1, Pouch2, Pouch3, Pouch4 }
+    internal enum RaidMenuAction { Resume, Bag, Wardrobe, Base, Join, CancelQueue, Quit, Pouch1, Pouch2, Pouch3, Pouch4,
+        HarborDaylight, HarborPoster, HarborDusk }
 
     public sealed partial class RaidClient
     {
@@ -40,6 +41,12 @@ namespace HeavyPockets
 
         internal void UseMenu(RaidMenuAction action)
         {
+            if (action >= RaidMenuAction.HarborDaylight && action <= RaidMenuAction.HarborDusk)
+            {
+                if (screen == RaidScreen.Menu)
+                    RaidScenery.SetEnvironmentStyle((int)action - (int)RaidMenuAction.HarborDaylight);
+                return;
+            }
             if (action >= RaidMenuAction.Pouch1 && action <= RaidMenuAction.Pouch4)
             {
                 if (screen == RaidScreen.Base && extracted && !disconnected && !queued && !changingQueue)

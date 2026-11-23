@@ -16,7 +16,7 @@ namespace HeavyPockets
         internal RaidScenery(Transform root)
         {
             this.root = root;
-            architecture = new GameObject("Terminal architecture").transform;
+            architecture = new GameObject("Freight yard").transform;
             architecture.SetParent(root, false);
             concrete = Surface("Cast concrete", new Color32(149, 142, 128, 255), SurfaceFinish.Concrete);
             floorFinish = Surface("Warehouse slab", new Color32(111, 115, 111, 255), SurfaceFinish.Concrete);
@@ -38,6 +38,7 @@ namespace HeavyPockets
 
             BuildRoom();
             BakeArchitecture();
+            BuildCoast();
             BuildCrate();
             BuildHarborPrint();
             BuildLighting();
@@ -55,6 +56,7 @@ namespace HeavyPockets
             Object.Destroy(signInk);
             foreach (Mesh mesh in shellMeshes)
                 Object.Destroy(mesh);
+            DisposeLighting();
             DisposeHarborPrint();
             DisposePropMeshes();
             DisposeSurfaces();
@@ -129,7 +131,7 @@ namespace HeavyPockets
             }
             foreach (var group in parts)
             {
-                var mesh = new Mesh { name = group.Key.name + " architecture" };
+                var mesh = new Mesh { name = group.Key.name + " architecture", indexFormat = IndexFormat.UInt32 };
                 mesh.CombineMeshes(group.Value.ToArray(), true, true);
                 mesh.UploadMeshData(true);
                 shellMeshes.Add(mesh);
