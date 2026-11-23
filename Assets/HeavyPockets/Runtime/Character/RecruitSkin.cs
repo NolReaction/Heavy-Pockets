@@ -116,7 +116,7 @@ namespace HeavyPockets
         private struct Arm
         {
             private readonly Transform shoulder, elbow, wrist;
-            private readonly int shoulderDown, axillaContact, elbowFlex;
+            private readonly int shoulderDown, axillaContact, elbowFlex, elbowFold;
 
             public Arm(Dictionary<string, Transform> joints, string boneSuffix, string shapeSuffix)
             {
@@ -126,6 +126,7 @@ namespace HeavyPockets
                 shoulderDown = Shape("ShoulderDown" + shapeSuffix);
                 axillaContact = Shape("AxillaContact" + shapeSuffix);
                 elbowFlex = Shape("ElbowFlex" + shapeSuffix);
+                elbowFold = Shape("ElbowFold" + shapeSuffix);
             }
 
             private static int Shape(string name)
@@ -145,10 +146,13 @@ namespace HeavyPockets
                 float lowered = Mathf.InverseLerp(.045f, .990f, down);
                 float contact = Mathf.InverseLerp(1.20951316f, Mathf.PI * .5f,
                     Mathf.Asin(Mathf.Clamp01(1.00366f * down)));
-                float bend = Mathf.InverseLerp(20f, 125f, Vector3.Angle(upper, wrist.position - elbow.position));
+                float elbowAngle = Vector3.Angle(upper, wrist.position - elbow.position);
                 if (shoulderDown >= 0) target.SetBlendShapeWeight(shoulderDown, Mathf.SmoothStep(0f, 100f, lowered));
                 if (axillaContact >= 0) target.SetBlendShapeWeight(axillaContact, 100f * contact * contact);
-                if (elbowFlex >= 0) target.SetBlendShapeWeight(elbowFlex, Mathf.SmoothStep(0f, 100f, bend));
+                if (elbowFlex >= 0)
+                    target.SetBlendShapeWeight(elbowFlex, Mathf.SmoothStep(0f, 100f, Mathf.InverseLerp(20f, 125f, elbowAngle)));
+                if (elbowFold >= 0)
+                    target.SetBlendShapeWeight(elbowFold, Mathf.SmoothStep(0f, 100f, Mathf.InverseLerp(85f, 135f, elbowAngle)));
             }
         }
     }

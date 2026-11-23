@@ -12,6 +12,7 @@ namespace HeavyPockets
         private enum Move { Idle, Walk, Back, Left, Right, Jog, Sprint, CrouchIdle, CrouchWalk,
             CrouchBack, CrouchLeft, CrouchRight, TurnLeft, TurnRight,
             Jump, RunJumpLeft, RunJumpRight, Land, SlideIn, Slide, SlideOut, Count }
+        private enum Travel { Still, Longitudinal, Left, Right }
 
         private static AnimationClip[] clips;
         private static float sprintStride;
@@ -28,6 +29,8 @@ namespace HeavyPockets
         private bool hasLookHeading;
         private Vector3 lastPosition, velocity;
         private float lastYaw, turnSpeed, phase, pivotPhase, idleTime, crouch, liftSpeed, runBlend, airBlend, landingTime;
+        private Travel travel;
+        private float leftPhaseOffset, rightPhaseOffset;
         private float travellingJump, slideTime, slideExit, entryWeight, slideYaw;
         private bool sprinting, airborne, wasAirborne, leftLeads, sliding, wasSliding;
 
@@ -109,6 +112,8 @@ namespace HeavyPockets
             velocity = Vector3.zero;
             turnSpeed = 0f;
             phase = pivotPhase = 0f;
+            travel = Travel.Still;
+            leftPhaseOffset = rightPhaseOffset = 0f;
             Array.Clear(gaitWeights, 0, gaitWeights.Length);
             gaitWeights[(int)Move.Idle] = 1f - crouch;
             gaitWeights[(int)Move.CrouchIdle] = crouch;
@@ -169,11 +174,20 @@ namespace HeavyPockets
             runBlend = Mathf.Lerp(runBlend, requestedRun, 1f - Mathf.Exp(-dt * 13f));
             float run = runBlend;
             float jog = SmoothRange(1.90f, 3.65f, speed);
-            // Travel per full two-foot cycle. All locomotion clips start on the same foot.
+            // Travel per full two-foot cycle.
             float forwardStride = Mathf.Lerp(Mathf.Lerp(1.31f, 1.97f, jog), sprintStride, run);
             float stride = forward * forwardStride + back * 1.04f + side * 1.08f;
             stride = Mathf.Lerp(stride, forward * 1.65f + (back + side) * .86f, crouch);
-            if (!airborne && !sliding) phase = Mathf.Repeat(phase + distance / Mathf.Max(stride, .75f), 1f);
+            if (!airborne && !sliding)
+            {
+                SelectLeadingFoot(motion, speed);
+                phase = Mathf.Repeat(phase + distance / Mathf.Max(stride, .75f), 1f);
+            }
+            else
+            {
+                travel = Travel.Longitudinal;
+                leftPhaseOffset = rightPhaseOffset = 0f;
+            }
             idleTime += dt;
             if (airborne && !wasAirborne)
             {
@@ -203,21 +217,20 @@ namespace HeavyPockets
             Set(Move.Jog, high * forward * jog * (1f - run), phase);
             Set(Move.Sprint, high * forward * run, phase);
             Set(Move.Back, high * back, phase);
-            Set(Move.Left, high * Mathf.Max(0f, -direction.x), phase);
-            Set(Move.Right, high * Mathf.Max(0f, direction.x), phase);
+            Set(Move.Left, high * Mathf.Max(0f, -direction.x), phase + leftPhaseOffset);
+            Set(Move.Right, high * Mathf.Max(0f, direction.x), phase + rightPhaseOffset);
             Set(Move.CrouchWalk, low * forward, phase);
             Set(Move.CrouchBack, low * back, phase);
-            Set(Move.CrouchLeft, low * Mathf.Max(0f, -direction.x), phase);
-            Set(Move.CrouchRight, low * Mathf.Max(0f, direction.x), phase);
+            Set(Move.CrouchLeft, low * Mathf.Max(0f, -direction.x), phase + leftPhaseOffset);
+            Set(Move.CrouchRight, low * Mathf.Max(0f, direction.x), phase + rightPhaseOffset);
             // Ballistic time follows the motor on both the ascending and descending arc.
             float flight = airborne ? Mathf.InverseLerp(RaidLocomotion.JumpImpulse,-RaidLocomotion.JumpImpulse,liftSpeed) : 1f;
             float airWeight = airBlend * (1f-slideWeight);
             Set(Move.Jump, airWeight * (1f-travellingJump), Mathf.Min(.9999f,flight));
             Set(leftLeads ? Move.RunJumpLeft : Move.RunJumpRight, airWeight * travellingJump, Mathf.Min(.9999f,flight));
             Set(Move.Land, land * (1f-slideWeight), Mathf.Min(.999f,landingTime/.39f));
-            // Direction changes keep both anatomical feet on a shared phase. Fade the
-            // outgoing clips as they continue to play, even across a full reversal.
-            float transition = 1f - Mathf.Exp(-dt * 15f);
+            // Respond quickly to a lateral push-off while keeping the outgoing pose in motion.
+            float transition = 1f - Mathf.Exp(-dt * Mathf.Lerp(15f, 22f, side));
             for (int i = 0; i < gaitWeights.Length; i++)
             {
                 gaitWeights[i] = Mathf.Lerp(gaitWeights[i], weights[i], transition);
@@ -230,6 +243,32 @@ namespace HeavyPockets
                 float twist = sliding ? Mathf.Clamp(Mathf.DeltaAngle(facing.FeetYaw,lookHeading),-35f,35f) : facing.LookTwist;
                 ApplyLookTwist(twist);
             }
+        }
+
+        private void SelectLeadingFoot(Vector3 motion, float speed)
+        {
+            if (speed < .10f) travel = Travel.Still;
+            if (speed < .18f) return;
+            var next = Mathf.Abs(motion.x) >= Mathf.Abs(motion.z)
+                ? (motion.x < 0f ? Travel.Left : Travel.Right)
+                : Travel.Longitudinal;
+            if (next != travel && next != Travel.Longitudinal && travel != Travel.Longitudinal)
+            {
+                // In the standing and crouched strafe clips these are the outward swings:
+                // the leading ankle passes its idle X while the opposite foot is planted.
+                float opening = next == Travel.Left ? .80f : .30f;
+                float offset = phase - opening;
+                leftPhaseOffset = next == Travel.Left ? 0f : Mathf.Repeat(leftPhaseOffset + offset, 1f);
+                rightPhaseOffset = next == Travel.Right ? 0f : Mathf.Repeat(rightPhaseOffset + offset, 1f);
+                phase = opening;
+            }
+            travel = next;
+            // Preserve the clock of the outgoing strafe during the crossfade. Once it
+            // disappears it can share the main clock again for a later diagonal blend.
+            if (next != Travel.Left && gaitWeights[(int)Move.Left] + gaitWeights[(int)Move.CrouchLeft] < .001f)
+                leftPhaseOffset = 0f;
+            if (next != Travel.Right && gaitWeights[(int)Move.Right] + gaitWeights[(int)Move.CrouchRight] < .001f)
+                rightPhaseOffset = 0f;
         }
 
         private float PoseSlide(float dt)

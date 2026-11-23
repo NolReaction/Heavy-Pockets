@@ -42,7 +42,7 @@ namespace HeavyPockets
             public bool AtBase;
             public byte PouchLevel = 1;
             public bool AcceptsStyledPoses, AcceptsModelPoses;
-            public int Style = RunnerAppearance.DefaultStyle;
+            public int Style = RunnerAppearance.LegacyStyle;
             public readonly HashSet<ulong> VisibleActors = new HashSet<ulong>();
             public float IngressCredits = 64f;
             public float MoveCredits = 12f;

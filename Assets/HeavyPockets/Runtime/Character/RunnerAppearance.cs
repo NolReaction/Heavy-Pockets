@@ -6,10 +6,12 @@ namespace HeavyPockets
 {
     internal sealed class RunnerAppearance : MonoBehaviour
     {
-        internal const int DefaultStyle = 0;
         internal const string ResourcePath = "Runner/Character";
         internal const int ModelCategory = 6;
         internal const int ModelFlag = 1 << (ModelCategory * 2);
+        internal const int DefaultStyle = ModelFlag;
+        // A pose without a style field has always meant the original modular worker.
+        internal const int LegacyStyle = 0;
         internal static readonly string[] Categories = { "Тон кожи", "Причёска", "Лицо", "Верх", "Брюки", "Расцветка", "Персонаж" };
         private static readonly string[][] choices =
         {
