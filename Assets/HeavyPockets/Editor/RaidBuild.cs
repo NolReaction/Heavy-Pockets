@@ -34,6 +34,7 @@ namespace HeavyPockets.Editor
             }
 
             var previousArchitecture = UnityEditor.OSXStandalone.UserBuildSettings.architecture;
+            var previousSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
             try
             {
                 UnityEditor.OSXStandalone.UserBuildSettings.architecture =
@@ -43,6 +44,8 @@ namespace HeavyPockets.Editor
             }
             finally
             {
+                // BuildPlayer persists its subtarget. Restore the editor's play mode after the server build.
+                EditorUserBuildSettings.standaloneBuildSubtarget = previousSubtarget;
                 UnityEditor.OSXStandalone.UserBuildSettings.architecture = previousArchitecture;
             }
         }
