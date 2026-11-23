@@ -39,7 +39,10 @@ function Copy-BuildTree([string]$Source,[string]$Destination,[string[]]$ExtraOpt
 function Initialize-RaidBuildProject([string]$Project,[string]$Stage,[bool]$UsePluginConfig,[string]$Package) {
     $assets = Join-Path $Project 'Assets'
     $exclude = if (!$UsePluginConfig) {
-        @('/XD', (Join-Path $assets 'StreamingAssets/EOS'), '/XF', (Join-Path $assets 'StreamingAssets/EOS.meta'))
+        # Imported UPM samples depend on EOSManager from the full plugin.
+        $samples = Join-Path $assets 'Samples/Epic Online Services Plugin for Unity'
+        @('/XD', (Join-Path $assets 'StreamingAssets/EOS'), $samples,
+          '/XF', (Join-Path $assets 'StreamingAssets/EOS.meta'), "$samples.meta")
     }
     Copy-BuildTree $assets (Join-Path $Stage 'Assets') $exclude
     foreach ($name in 'Packages','ProjectSettings') {

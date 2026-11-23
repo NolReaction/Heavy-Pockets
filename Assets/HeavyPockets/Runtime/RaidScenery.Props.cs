@@ -77,15 +77,16 @@ namespace HeavyPockets
 
         internal Transform InstantiatePlayer(ulong id, Vector3 position, float yaw)
         {
-            if (runnerPrefab == null) runnerPrefab = Resources.Load<GameObject>("HeavyPockets_BaseBody");
+            if (runnerPrefab == null) runnerPrefab = Resources.Load<GameObject>("QuaterniusRunner");
             var actor = Child(root, "Runner " + id, position);
             actor.gameObject.SetActive(false);
             actor.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
             var model = Object.Instantiate(runnerPrefab, actor, false);
-            var skin = model.GetComponentInChildren<SkinnedMeshRenderer>(true);
+            var rig = new RunnerRig(model);
+            QuaterniusAppearance.AttachHair(model);
             Renderer shadow = GroundContact(actor, 1.7f, 1.9f);
-            shadow.gameObject.AddComponent<RunnerContactShadow>().Bind(skin);
-            actor.gameObject.AddComponent<FreightRunnerGait>().Bind(skin);
+            shadow.gameObject.AddComponent<RunnerContactShadow>().Bind(rig);
+            actor.gameObject.AddComponent<FreightRunnerGait>().Bind(rig);
             return actor;
         }
 

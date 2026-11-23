@@ -39,27 +39,27 @@ namespace HeavyPockets
             Vector2 previous = new Vector2(9f, 9f);
             float nextInput = 0f;
             MoveButtons previousButtons = MoveButtons.None;
-            bool standingJump = false, runningJump = false;
+            bool standingJump = false, runningJump = false, portraitSaved = false;
             int frame = 0;
             float start = Time.unscaledTime;
             var endOfFrame = new WaitForEndOfFrame();
-            var skin = Client.ProbeLocalBody.GetComponentInChildren<SkinnedMeshRenderer>();
-            Transform Bone(string name) => Array.Find(skin.bones, b => b.name.EndsWith(":" + name, StringComparison.Ordinal));
-            var hips = Bone("Hips");
-            var chest = Bone("Spine2");
-            var leftHip = Bone("LeftUpLeg");
-            var rightHip = Bone("RightUpLeg");
-            var leftKnee = Bone("LeftLeg");
-            var rightKnee = Bone("RightLeg");
-            var leftFoot = Bone("LeftFoot");
-            var rightFoot = Bone("RightFoot");
-            var leftArm = Bone("LeftArm");
-            var rightArm = Bone("RightArm");
-            var leftHand = Bone("LeftHand");
-            var rightHand = Bone("RightHand");
+            var rig = Client.ProbeLocalBody.GetComponent<FreightRunnerGait>().Rig;
+            var skin = rig.Body;
+            var hips = rig.Bone("pelvis");
+            var chest = rig.Bone("spine_03");
+            var leftHip = rig.Bone("thigh_l");
+            var rightHip = rig.Bone("thigh_r");
+            var leftKnee = rig.Bone("calf_l");
+            var rightKnee = rig.Bone("calf_r");
+            var leftFoot = rig.Bone("foot_l");
+            var rightFoot = rig.Bone("foot_r");
+            var leftArm = rig.Bone("upperarm_l");
+            var rightArm = rig.Bone("upperarm_r");
+            var leftHand = rig.Bone("hand_l");
+            var rightHand = rig.Bone("hand_r");
             var baked = new Mesh();
             var vertices = new List<Vector3>(skin.sharedMesh.vertexCount);
-            float nextSoleSample = 2.12f, maxGap = 0f;
+            float nextSoleSample = 1.94f, maxGap = 0f, minGap = float.PositiveInfinity;
             int sprintSamples = 0;
             try
             {
@@ -92,7 +92,7 @@ namespace HeavyPockets
                         }
                         if (t >= nextSoleSample && t < 2.82f && Client.OwnMotion.Sprinting)
                         {
-                            // Measure the rendered skin: a valid motor height can still leave both soles in the air.
+                            // A running stride alternates a planted foot with a short flight phase.
                             skin.BakeMesh(baked);
                             baked.GetVertices(vertices);
                             float lowest = float.PositiveInfinity;
@@ -100,8 +100,9 @@ namespace HeavyPockets
                             foreach (Vector3 vertex in vertices)
                                 lowest = Mathf.Min(lowest, toWorld.MultiplyPoint3x4(vertex).y);
                             maxGap = Mathf.Max(maxGap, lowest);
+                            minGap = Mathf.Min(minGap, lowest);
                             sprintSamples++;
-                            nextSoleSample = t + .033f;
+                            nextSoleSample = t + .016f;
                         }
                         Transform body = Client.ProbeLocalBody;
                         Vector3 acrossHips = rightHip.position - leftHip.position;
@@ -120,7 +121,7 @@ namespace HeavyPockets
                         // Rear view shows foot lanes and turning; rotate to three-quarter profile for the backstep.
                         Vector3 rear = new Vector3(-2.70f, .66f, -.55f);
                         Vector3 profile = new Vector3(-.72f, .22f, -2.78f);
-                        float sideView = Ramp(2.98f, 3.34f, t) * (1f - Ramp(5.85f, 6.4f, t));
+                        float sideView = Ramp(1.42f, 1.91f, t) * (1f - Ramp(5.85f, 6.4f, t));
                         sample.transform.position = focus + Vector3.Slerp(rear, profile, sideView);
                         sample.transform.LookAt(focus);
                         RenderTexture active = RenderTexture.active;
@@ -133,6 +134,21 @@ namespace HeavyPockets
                         finally { RenderTexture.active = active; }
                         string name = "frame-" + frame.ToString("D3") + ".jpg";
                         File.WriteAllBytes(Path.Combine(path, name), pixels.EncodeToJPG(90));
+                        if (t >= 12.35f && !portraitSaved)
+                        {
+                            Vector3 portraitFocus = rig.Bone("Head").position - Vector3.up * .21f;
+                            sample.transform.position = portraitFocus + body.forward * 1.36f + body.right * .47f + Vector3.up * .11f;
+                            sample.transform.LookAt(portraitFocus);
+                            try
+                            {
+                                sample.Render();
+                                RenderTexture.active = target;
+                                pixels.ReadPixels(rect, 0, 0, false);
+                                File.WriteAllBytes(Path.Combine(directory, "character-portrait.jpg"), pixels.EncodeToJPG(95));
+                                portraitSaved = true;
+                            }
+                            finally { RenderTexture.active = active; }
+                        }
                         times.WriteLine(t.ToString("F4", CultureInfo.InvariantCulture));
                         frame++;
                     }
@@ -147,12 +163,13 @@ namespace HeavyPockets
                 Destroy(baked);
                 Destroy(cameraObject);
             }
-            if (sprintSamples < 6 || !(maxGap < .09f))
+            if (sprintSamples < 12 || minGap < -.045f || minGap > .04f || maxGap < .045f || maxGap > .35f)
             {
-                Fail($"Sprint floor contact: {maxGap:F3} m maximum gap across {sprintSamples} samples.");
+                Fail($"Sprint stance and flight: {minGap:F3} to {maxGap:F3} m across {sprintSamples} samples.");
                 yield break;
             }
-            Signal("motion-contact", maxGap.ToString("F4", CultureInfo.InvariantCulture));
+            Signal("motion-contact", minGap.ToString("F4", CultureInfo.InvariantCulture));
+            Signal("motion-flight", maxGap.ToString("F4", CultureInfo.InvariantCulture));
             // Rejoin the rest of the two-client test on the other side of the partition.
             yield return Walk(new Vector2(-3.35f, -1.8f));
             yield return Walk(new Vector2(-3.35f, 2.35f));

@@ -1,3 +1,16 @@
+The playable runner uses Superhero_Male_FullBody, eyes, brows, hairstyles,
+beard and textures from Universal Base Characters (Standard), by Quaternius.
+https://quaternius.com/packs/universalbasecharacters.html
+
+The animations in Assets/HeavyPockets/Resources/QuaterniusMotion use
+Quaternius Universal Animation Library (Standard) on the native character
+skeleton, with directional and jump poses adapted for Heavy Pockets.
+https://quaternius.com/packs/universalanimationlibrary.html
+
+The character and animation packs are released under CC0 1.0.
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Earlier BaseBody prototype:
 The full-body locomotion clips in Assets/HeavyPockets/Resources/FreightMotion
 are adapted from Universal Animation Library (Standard), by Quaternius.
 

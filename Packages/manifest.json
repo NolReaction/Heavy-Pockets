@@ -3,6 +3,8 @@
     "com.unity.modules.animation": "1.0.0",
     "com.unity.modules.unitywebrequest": "1.0.0",
     "com.playeveryware.eos": "file:../com.playeveryware.eos-6.3.0.tgz",
+    "com.unity.ugui": "2.0.0",
+    "com.unity.modules.androidjni": "1.0.0",
     "com.unity.netcode.gameobjects": "2.13.3",
     "com.unity.transport": "2.7.4",
     "com.unity.modules.screencapture": "1.0.0",

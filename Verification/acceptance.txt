@@ -3,29 +3,29 @@ The blocked open produced no loot. The server generated two inventories across t
 At the same position, the right shoulder exposed the runner. Both directions reported intermediate camera positions. Each remote pose had an open sightline from the reported shoulder phase, and no new poses followed the hide until the return path cleared the wall.
 No remote coordinates or yaw were sent before the first corner peek or during renewed full cover. Switching viewpoint at rest exposed the other runner. Both clients received exactly the recorded remote packets.
 The moving runner first appeared with its center behind the wall, then continued walking behind full cover. During that hidden movement the observer received zero new remote poses.
-The renderer followed the shoulder transition and reversed from its current point (20 intermediate frames; largest screen-X step 0.0226; mid-flight reversal at 0.4114).
+The renderer followed the shoulder transition and reversed from its current point (20 intermediate frames; largest screen-X step 0.0223; mid-flight reversal at 0.4122).
 The remote runner was immediately opaque and correctly oriented on both sightings. 3/3 immediately opaque activations, 2 hides. Spawn 0.0000 m, turn 0.00 deg. First yaw 126.0, final error 0.00 deg.
-The center was still behind the wall when the renderer showed a partial silhouette in third person (333/1473 pixels) and first person (896/3531 pixels).
+The center was still behind the wall when the renderer showed a partial silhouette in third person (301/1412 pixels) and first person (796/3339 pixels).
 Camera measurements included both shoulder views (third 2.31 m, first 0.00 m, chest X 34.8 % right / 65.2 % left. V restored the left shoulder.)
 Compared the world before and after opening the field inventory (left world luminance delta 0.00/255 across 24 regions, both panels and rotated atlas images fit).
 Facing away from the partition retracted the third-person camera to 0.69 m on the runner's side.
 Each accepted HUD item stayed at its drop target from mouse release through every private response and split inventory snapshot. Every transfer had a single matching outcome for its sender.
-The search resumed the partially searched item with 550 ms remaining and the same footprint and item layout.
-Both openers received 11 anonymous rectangles. Each identification replaced exactly one rectangle with its item; no empty-cell scans, item identifiers or type bytes in the hidden records. B searched for 8444 ms.
+The search resumed the partially searched item with 517 ms remaining and the same footprint and item layout.
+Both openers received 11 anonymous rectangles. Each identification replaced exactly one rectangle with its item; no empty-cell scans, item identifiers or type bytes in the hidden records. B searched for 8433 ms.
 Closing paused all crate snapshots. Reopening immediately restored only the discoveries from before closure. Nearby B received no crate frame before its own search.
 The floating item followed sub-cell pointer motion and kept its center when rotated from an off-center grip. Releasing it snapped to the requested cells. The server rejected overlap and edge overflow without changing either inventory.
 A single press of F reclaimed the item under the pointer while a different identified item was selected by keyboard. The server received the hovered instance ID.
-Concurrent takes arrived from separate clients (send spread 4,6 ms). Exactly one got the item. It was returned and taken by the other player.
-A received 42 matching private/status packets and extracted 1 distinct personally owned items. The crate retained all 8 other instances.
-B received 31 matching private/status packets and extracted 2 distinct personally owned items. The crate retained all 8 other instances.
+Concurrent takes arrived from separate clients (send spread 13,3 ms). Exactly one got the item. It was returned and taken by the other player.
+A received 45 matching private/status packets and extracted 2 distinct personally owned items. The crate retained all 8 other instances.
+B received 28 matching private/status packets and extracted 1 distinct personally owned items. The crate retained all 8 other instances.
 Ctrl-click transferred discovered loot using first-fit placement. After closing the crate and walking away, dragging inside the personal bag changed the saved cell and the extraction receipt preserved it.
 Escape opened the menu, the personal bag returned to that menu, and Resume restored control. The menu and bag added no server inventory commands.
 A queued, cancelled and queued again while B retained their first-raid loot. Only after B extracted did A enter the next raid. Each client acknowledged both starts and received an empty personal bag on entry.
 Holding F over an empty area sent no item requests. Crossing two identified items sent exactly two takes. Revisiting them sent no duplicates. One hold over the bag returned both items, with one matching private acknowledgement and two authoritative container snapshots per transfer.
-The player moved with the field backpack open. The server closed the out-of-range crate and sent no further crate data. 1.31 -> 3.61
+The player moved with the field backpack open. The server closed the out-of-range crate and sent no further crate data. 1.35 -> 3.50
 B joined the second raid after the sweep with an empty backpack. Its connection received no private crate or transfer data from A.
 Two independent drops reached the first two pouch pockets before the first acknowledgement. A locked pocket and an in-raid pouch change were refused.
 Five private equipment positions, weapon swapping, armor unequip/equip, a 24/36/54-cell shared inventory and quick keys 1-4 survived real drag and selection actions. An occupied ninth row prevented backpack downsizing. Both backpacks and all four pouch tiers appeared in the test crate.
 All four pouch levels were selectable at base and the chosen loadout survived entry into the next raid. The second player kept their own kit.
 Both players crouched, stood up, jumped, landed and sprinted. Each received the remote stance, airborne height and sprint in normal pose snapshots.
-Rendered gait kept distinct foot lanes, an upright backstep and compact leaps; shoulders led the pelvis during the stationary camera glance.
+Rendered gait alternated support and flight (sole clearance -0.0044 to 0.2341 m), kept distinct foot lanes, an upright backstep and compact leaps; shoulders led the pelvis during the stationary camera glance.

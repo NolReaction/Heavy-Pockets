@@ -756,6 +756,11 @@ $poseFile = Join-Path $RunDirectory 'motion/poses.csv'
 if (Test-Path -LiteralPath $poseFile) {
     $poses = Import-Csv -LiteralPath $poseFile
     $run = @($poses | Where-Object { [double]$_.time -ge 2.12 -and [double]$_.time -le 2.82 })
+    $stance = Read-Marker 'A.motion-contact'
+    $flight = Read-Marker 'A.motion-flight'
+    Require ($null -ne $stance -and $null -ne $flight -and
+        [double]$stance -ge -.045 -and [double]$stance -le .04 -and
+        [double]$flight -ge .045 -and [double]$flight -le .35) 'sprint did not alternate ground contact and flight'
     $back = @($poses | Where-Object { [double]$_.time -ge 3.75 -and [double]$_.time -le 4.65 })
     $side = @($poses | Where-Object { [double]$_.time -ge 5.25 -and [double]$_.time -le 5.85 })
     $air = @($poses | Where-Object { [double]$_.rootHeight -gt .55 })
@@ -779,6 +784,6 @@ if (Test-Path -LiteralPath $poseFile) {
         [Math]::IEEERemainder([double]$_.chestHeading - [double]$_.pelvisHeading - $neutralTwist, 360)
     } | Measure-Object -Maximum).Maximum
     Require ($lead -gt 4 -and $lead -lt 22) 'small camera glance did not lead with the upper body'
-    Mark 'Rendered gait kept distinct foot lanes, an upright backstep and compact leaps; shoulders led the pelvis during the stationary camera glance.'
+    Mark "Rendered gait alternated support and flight (sole clearance $stance to $flight m), kept distinct foot lanes, an upright backstep and compact leaps; shoulders led the pelvis during the stationary camera glance."
 }
 [IO.File]::WriteAllLines((Join-Path $RunDirectory 'acceptance.txt'), [string[]]$checks)

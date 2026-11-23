@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace HeavyPockets
@@ -16,12 +15,12 @@ namespace HeavyPockets
         private Renderer decal;
         private Sole left, right;
 
-        internal void Bind(SkinnedMeshRenderer skin)
+        internal void Bind(RunnerRig rig)
         {
             properties = new MaterialPropertyBlock();
             decal = GetComponent<Renderer>();
-            left = new Sole(skin.bones, transform.parent, "Left");
-            right = new Sole(skin.bones, transform.parent, "Right");
+            left = new Sole(rig.Bone("foot_l"), rig.Bone("ball_l"), transform.parent);
+            right = new Sole(rig.Bone("foot_r"), rig.Bone("ball_r"), transform.parent);
         }
 
         private void LateUpdate()
@@ -43,10 +42,10 @@ namespace HeavyPockets
             private readonly Transform ankle, toe;
             private readonly Vector3 heelLocal, toeLocal;
 
-            internal Sole(Transform[] bones, Transform actor, string side)
+            internal Sole(Transform ankle, Transform toe, Transform actor)
             {
-                ankle = Array.Find(bones, bone => bone.name.EndsWith(":" + side + "Foot", StringComparison.Ordinal));
-                toe = Array.Find(bones, bone => bone.name.EndsWith(":" + side + "ToeBase", StringComparison.Ordinal));
+                this.ankle = ankle;
+                this.toe = toe;
                 Vector3 forward = Vector3.ProjectOnPlane(toe.position - ankle.position, Vector3.up).normalized;
                 Vector3 heel = ankle.position - forward * .035f;
                 Vector3 tip = toe.position + forward * .048f;
