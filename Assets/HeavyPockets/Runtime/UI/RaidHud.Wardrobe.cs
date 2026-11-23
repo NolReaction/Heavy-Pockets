@@ -15,7 +15,7 @@ namespace HeavyPockets
         {
             CloseWardrobe();
             WardrobeStyle = style;
-            wardrobeRow = 3;
+            wardrobeRow = (style & RunnerAppearance.ModelFlag) == 0 ? 4 : 0;
             finishWardrobe = finish;
             if (graphics) studio = new WardrobeStudio(style);
         }
@@ -32,18 +32,24 @@ namespace HeavyPockets
         internal void WardrobeKey(int rowStep, int change, bool enter)
         {
             if (finishWardrobe == null) return;
-            int count = RunnerAppearance.Categories.Length;
+            int count = VisibleRows;
             wardrobeRow = (wardrobeRow + rowStep + count) % count;
             if (change != 0) CycleOption(wardrobeRow, change);
             if (enter) finishWardrobe(true);
         }
 
+        private int VisibleRows => (WardrobeStyle & RunnerAppearance.ModelFlag) == 0 ? RunnerAppearance.Categories.Length : 1;
+
+        // Show the model first while retaining the saved bit positions of the original six categories.
+        private static int Category(int row) => row == 0 ? RunnerAppearance.ModelCategory : row - 1;
+
         private void CycleOption(int row, int step)
         {
             wardrobeRow = row;
-            int count = RunnerAppearance.Options(row).Length;
-            int value = (RunnerAppearance.Get(WardrobeStyle, row) + step + count) % count;
-            WardrobeStyle = RunnerAppearance.With(WardrobeStyle, row, value);
+            int category = Category(row);
+            int count = RunnerAppearance.Options(category).Length;
+            int value = (RunnerAppearance.Get(WardrobeStyle, category) + step + count) % count;
+            WardrobeStyle = RunnerAppearance.With(WardrobeStyle, category, value);
             studio?.Dress(WardrobeStyle);
         }
 
@@ -56,7 +62,7 @@ namespace HeavyPockets
             float rail = Mathf.Clamp(width * .405f, 333f, 450f);
             float margin = 26f;
             float top = Mathf.Clamp(height * .15f, 76f, 132f);
-            float rowHeight = Mathf.Clamp((height - top - 75f) / RunnerAppearance.Categories.Length, 48, 69);
+            float rowHeight = Mathf.Clamp((height - top - 75f) / VisibleRows, 38, 69);
             Rect stage = new Rect(rail, 0, width - rail, height);
             if (paint)
             {
@@ -84,8 +90,9 @@ namespace HeavyPockets
                 Block(margin, top + 5, rail - margin * 2, 1, Rule);
             }
 
-            for (int i = 0; i < RunnerAppearance.Categories.Length; i++)
+            for (int i = 0; i < VisibleRows; i++)
             {
+                int category = Category(i);
                 float y = top + 9 + i * rowHeight;
                 var row = new Rect(margin, y, rail - margin * 2, rowHeight - 4);
                 float button = 34f;
@@ -97,8 +104,8 @@ namespace HeavyPockets
                     Block(row.x, row.y, row.width, row.height, selected ? Slate : StationRow);
                     if (selected) Block(row.x, row.y, 3f, row.height, Mint);
                     float pad = row.x + 12;
-                    Text(pad, y + 3, prev.x - pad, 16, RunnerAppearance.Categories[i], 11, selected ? Mint : Muted, true);
-                    string value = RunnerAppearance.Options(i)[RunnerAppearance.Get(WardrobeStyle, i)];
+                    Text(pad, y + 3, prev.x - pad, 16, RunnerAppearance.Categories[category], 11, selected ? Mint : Muted, true);
+                    string value = RunnerAppearance.Options(category)[RunnerAppearance.Get(WardrobeStyle, category)];
                     Text(pad, y + 16, prev.x - pad - 3, row.height - 17, value, 16, Paper, true);
                 }
                 if (WardrobeButton(prev, i * 3, "‹")) { CycleOption(i, -1); return; }

@@ -41,8 +41,8 @@ namespace HeavyPockets
             public bool Entered, Queued;
             public bool AtBase;
             public byte PouchLevel = 1;
-            public bool AcceptsStyledPoses;
-            public int Style = RunnerAppearance.DefaultStyle;
+            public bool AcceptsStyledPoses, AcceptsModelPoses;
+            public int Style = RunnerAppearance.LegacyStyle;
             public readonly HashSet<ulong> VisibleActors = new HashSet<ulong>();
             public float IngressCredits = 64f;
             public float MoveCredits = 12f;
@@ -112,6 +112,7 @@ namespace HeavyPockets
                 player.PouchLevel = previous.PouchLevel;
                 player.Style = previous.Style;
                 player.AcceptsStyledPoses = previous.AcceptsStyledPoses;
+                player.AcceptsModelPoses = previous.AcceptsModelPoses;
             }
             players[id] = player;
             loot.IssueKit(id, player.PouchLevel);
@@ -222,9 +223,15 @@ namespace HeavyPockets
             if (!player.Entered && !player.Exited) return;
             if (command == RaidCommand.SetStyle)
             {
-                if (bytes.Length != 3) return;
+                if (bytes.Length != 3 && bytes.Length != 4) return;
                 int style = bytes[1] | (bytes[2] << 8);
-                if (RunnerAppearance.Normalize(style) != style) return;
+                if ((style & RunnerAppearance.ModelFlag) != 0 || RunnerAppearance.Normalize(style) != style) return;
+                if (bytes.Length == 4)
+                {
+                    if (bytes[3] > 1) return;
+                    player.AcceptsModelPoses = true;
+                    if (bytes[3] == 1) style |= RunnerAppearance.ModelFlag;
+                }
                 // Older clients never send a style, and keep receiving the original 31-byte poses.
                 player.AcceptsStyledPoses = true;
                 player.Style = style;
@@ -427,7 +434,7 @@ namespace HeavyPockets
             {
                 if (actor.Exited)
                     continue;
-                byte[] pose = null, legacyPose = null;
+                byte[] pose = null, modularPose = null, legacyPose = null;
                 foreach (Player recipient in players.Values)
                 {
                     if (recipient.Exited)
@@ -446,9 +453,16 @@ namespace HeavyPockets
                     }
                     if (send)
                     {
-                        byte[] packet = recipient.AcceptsStyledPoses
-                            ? (pose ??= RaidWire.Encode(Pose(actor)))
-                            : (legacyPose ??= RaidWire.Encode(Pose(actor), false));
+                        byte[] packet;
+                        if (!recipient.AcceptsStyledPoses)
+                            packet = legacyPose ??= RaidWire.Encode(Pose(actor), false);
+                        else if (!recipient.AcceptsModelPoses && (actor.Style & RunnerAppearance.ModelFlag) != 0)
+                        {
+                            var appearance = Pose(actor);
+                            appearance.Style &= ~RunnerAppearance.ModelFlag;
+                            packet = modularPose ??= RaidWire.Encode(appearance);
+                        }
+                        else packet = pose ??= RaidWire.Encode(Pose(actor));
                         RaidWire.Send(net, recipient.Id, RaidWire.Events, packet, audit);
                     }
                 }

@@ -18,6 +18,39 @@ namespace HeavyPockets.Editor
         private static void BuildLocalServer() => BuildFromMenu(true);
         public static void Server() => Build(true, false);
 
+#if UNITY_EDITOR_OSX
+        [MenuItem("Heavy Pockets/Build macOS client")]
+        private static void BuildMacClient() => BuildMac(false);
+
+        [MenuItem("Heavy Pockets/Build macOS dedicated server")]
+        private static void BuildMacServer() => BuildMac(true);
+
+        private static void BuildMac(bool server)
+        {
+            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.playeveryware.eos/package.json") != null)
+            {
+                Debug.LogError("Remove com.playeveryware.eos from Packages/manifest.json in the local macOS checkout before building.");
+                return;
+            }
+
+            var previousArchitecture = UnityEditor.OSXStandalone.UserBuildSettings.architecture;
+            var previousSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
+            try
+            {
+                UnityEditor.OSXStandalone.UserBuildSettings.architecture =
+                    System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64
+                        ? UnityEditor.Build.OSArchitecture.ARM64 : UnityEditor.Build.OSArchitecture.x64;
+                Build(server, false, BuildTarget.StandaloneOSX);
+            }
+            finally
+            {
+                // BuildPlayer persists its subtarget. Restore the editor's play mode after the server build.
+                EditorUserBuildSettings.standaloneBuildSubtarget = previousSubtarget;
+                UnityEditor.OSXStandalone.UserBuildSettings.architecture = previousArchitecture;
+            }
+        }
+#endif
+
         private static void BuildFromMenu(bool server)
         {
             if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.playeveryware.eos/package.json") == null)
@@ -46,9 +79,10 @@ namespace HeavyPockets.Editor
         public static void ProtectedClient() => Build(false, true);
         public static void ProtectedServer() => Build(true, true);
 
-        private static void Build(bool server, bool protectedBuild)
+        private static void Build(bool server, bool protectedBuild, BuildTarget target = BuildTarget.StandaloneWindows64)
         {
-            string output = "Build/Development";
+            bool mac = target == BuildTarget.StandaloneOSX;
+            string output = mac ? "Build/Development-Mac" : "Build/Development";
             string[] args = Environment.GetCommandLineArgs();
             int index = Array.IndexOf(args, "-hpBuildOutput");
             if (index >= 0)
@@ -67,12 +101,13 @@ namespace HeavyPockets.Editor
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
             PlayerSettings.resizableWindow = true;
             PlayerSettings.runInBackground = true;
+            string player = server ? "Server/HeavyPocketsServer" : "Client/HeavyPockets";
             var options = new BuildPlayerOptions
             {
                 scenes = new[] { Scene },
-                target = BuildTarget.StandaloneWindows64,
+                target = target,
                 subtarget = (int)(server ? StandaloneBuildSubtarget.Server : StandaloneBuildSubtarget.Player),
-                locationPathName = Path.Combine(output, server ? "Server/HeavyPocketsServer.exe" : "Client/HeavyPockets.exe"),
+                locationPathName = Path.Combine(output, player + (mac ? ".app" : ".exe")),
                 extraScriptingDefines = protectedBuild ? new[] { "HEAVY_POCKETS_EOS" } : Array.Empty<string>(),
                 options = protectedBuild ? BuildOptions.None : BuildOptions.Development
             };

@@ -12,16 +12,15 @@ https://quaternius.com/packs/universalanimationlibrary2.html
 Both Quaternius libraries are dedicated to the public domain under CC0 1.0.
 https://creativecommons.org/publicdomain/zero/1.0/
 
-The locally configured playable client uses the Mixamo running performance
-selected in the in-game comparison. The source was the "run" take of the
-three.js Xbot example, credited to Mixamo by the contributor. It was
-retargeted onto the player skeleton. The editable performance is kept in
-the local project. A fresh public checkout uses the Quaternius sprint.
+The selected sprint uses the "run" take of the three.js Xbot example,
+credited to Mixamo by its contributor. Setup-Mac.command installs the run
+locally. On any platform, invoke python3 Tools/Import-MixamoSprint.py
+(with py in place of python3 on Windows). The importer verifies the pinned
+source and retargets the performance onto the Heavy Pockets skeleton.
 
-To restore the selected run on another authorized development workstation,
-copy your local native Sprint.anim into
-Assets/HeavyPockets/Resources/RunnerPrivate/Sprint.anim before building.
-Unity imports the clip on refresh. The animation player picks it up at
-startup and uses the measured two-foot stride of 2.38 metres for playback.
+The native Sprint.anim stays in Assets/HeavyPockets/Resources/RunnerPrivate,
+outside source control. An existing locally tuned Sprint.anim takes
+precedence. Unity imports the clip on refresh and the game uses a 2.38 m
+stride; the bundled Quaternius sprint is available for offline checkouts.
 https://github.com/mrdoob/three.js/pull/18822#issuecomment-613028321
 https://community.adobe.com/questions-696/mixamo-faq-licensing-royalties-ownership-eula-and-tos-589400
