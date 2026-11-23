@@ -31,11 +31,13 @@ commonName = Common Name
 [issuer]
 basicConstraints = critical,CA:TRUE,pathlen:0
 keyUsage = critical,keyCertSign
+subjectKeyIdentifier = hash
 [server]
 basicConstraints = critical,CA:FALSE
 keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = critical,serverAuth
 subjectAltName = DNS:heavy-pockets.local
+authorityKeyIdentifier = keyid:always
 """
 
 
@@ -130,11 +132,12 @@ def prepare_credentials(lifetime, ticket_count):
         with tempfile.TemporaryDirectory(prefix="HeavyPockets-Credentials-") as temporary:
             config, ca, ca_key, request, initial_key, cert, key = (
                 str(Path(temporary) / name) for name in
-                ("openssl.cnf", "ca.pem", "ca.key", "server.csr", "server.pk8", "server.pem", "server.key")
+                ("openssl.cnf", "ca.pem", "ca.key", "server.csr", "server-original.key", "server.pem", "server.key")
             )
             Path(config).write_text(CERT_CONFIG, encoding="ascii")
             if not openssl(lifetime, "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-sha256",
                            "-config", config, "-extensions", "issuer", "-days", "1",
+                           "-set_serial", "0x01" + secrets.token_hex(15),
                            "-subj", "/CN=Heavy Pockets Local Raid", "-keyout", ca_key, "-out", ca):
                 raise RaidError(error)
             if not openssl(lifetime, "req", "-new", "-newkey", "rsa:2048", "-nodes", "-sha256",
@@ -223,8 +226,8 @@ def run_raid(lifetime, editor, requested_port):
             "Missing local client. Build the macOS client from the Heavy Pockets menu.",
         )
 
-    port = choose_port(editor, requested_port)
     server_credentials, ca, tickets = prepare_credentials(lifetime, 1 if editor else 2)
+    port = choose_port(editor, requested_port)
     if editor:
         server_log = Path(tempfile.gettempdir()) / f"HeavyPockets-Editor-{uuid.uuid4().hex}.log"
     else:
