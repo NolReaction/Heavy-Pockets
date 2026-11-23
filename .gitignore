@@ -1,0 +1,38 @@
+# Unity caches and editor-local state
+/[Ll]ibrary/
+/[Tt]emp/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Oo]bj/
+/[Mm]emory[Cc]aptures/
+/[Rr]ecordings/
+/[Bb]uild/
+/[Bb]uilds/
+/.vs/
+/.idea/
+/.vscode/
+*.csproj
+*.sln
+*.user
+*.suo
+*.pdb
+*.pidb
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+# Runtime captures may include per-process paths, wire data and private identifiers.
+/Verification/*
+!/Verification/*.png
+!/Verification/acceptance.txt
+# Local deployment configuration and credentials
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*.pem
+*.keystore
+/[Aa]ssets/[Ss]treaming[Aa]ssets/EOS/
+/[Aa]ssets/[Ss]treaming[Aa]ssets/EOS.meta
