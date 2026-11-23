@@ -19,33 +19,24 @@ namespace HeavyPockets
             yield return new WaitForSecondsRealtime(.12f);
             Capture("menu");
             yield return new WaitForSecondsRealtime(.18f);
-            int original = Client.SelectedStyle;
-            if (!Client.ProbeMenuClick(RaidMenuAction.Wardrobe) || Client.ProbeScreen != RaidScreen.Wardrobe ||
+            if (!Client.ProbeMenuClick(RaidMenuAction.Animations) || Client.ProbeScreen != RaidScreen.Animations ||
                 Client.MovementFromKeys(Vector2.up, true, true) != Vector2.zero)
-            { Fail("Wardrobe tab did not suspend movement"); yield break; }
-            Client.ProbeWardrobeKey(0, 1);
-            int changed = Client.ProbeWardrobeStyle;
-            Client.EscapePressed();
-            if (changed == original || Client.SelectedStyle != original || !Client.ProbeMenuClick(RaidMenuAction.Wardrobe) ||
-                Client.ProbeWardrobeStyle != original)
-            { Fail("Discarding the fitting changed the saved outfit"); yield break; }
+            { Fail("Animation preview did not suspend movement"); yield break; }
+            if (Client.ProbeAnimation != StarterMotion.Idle)
+            { Fail("Animation preview did not start with Idle"); yield break; }
             yield return new WaitForSecondsRealtime(.35f);
-            Capture("wardrobe");
-            yield return new WaitForSecondsRealtime(.2f);
-            Client.ProbeWardrobeKey(0, 1);
-            Client.ProbeWardrobeKey(1, 1);
-            Client.ProbeWardrobeKey(1, 2);
-            Client.ProbeWardrobeKey(2, 2);
-            changed = Client.ProbeWardrobeStyle;
-            Client.ProbeWardrobeKey(0, 0, true);
-            if (Client.SelectedStyle != changed || !Client.ProbeMenuClick(RaidMenuAction.Wardrobe) ||
-                Client.ProbeWardrobeStyle != changed)
-            { Fail("Applied outfit did not survive reopening the tab"); yield break; }
+            Capture("animation-preview");
+            Client.ProbeAnimationKey(1);
+            if (Client.ProbeAnimation != StarterMotion.Walk)
+            { Fail("Animation preview could not switch to Walk"); yield break; }
             yield return new WaitForSecondsRealtime(.35f);
-            Capture("wardrobe-changed");
-            yield return new WaitForSecondsRealtime(.15f);
+            Capture("animation-walk");
             Client.EscapePressed();
-            Signal("wardrobe-ok");
+            if (Client.ProbeScreen != RaidScreen.Menu || !Client.ProbeMenuClick(RaidMenuAction.Animations) ||
+                Client.ProbeAnimation != StarterMotion.Idle)
+            { Fail("Animation preview could not reopen at Idle"); yield break; }
+            Client.EscapePressed();
+            Signal("animation-preview-ok");
             if (!Client.ProbeMenuClick(RaidMenuAction.Bag) || !Client.ProbeInventoryOpen)
             { Fail("Menu did not open the player's bag"); yield break; }
             Client.EscapePressed();

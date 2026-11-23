@@ -41,8 +41,6 @@ namespace HeavyPockets
             public bool Entered, Queued;
             public bool AtBase;
             public byte PouchLevel = 1;
-            public bool AcceptsStyledPoses, AcceptsModelPoses;
-            public int Style = RunnerAppearance.LegacyStyle;
             public readonly HashSet<ulong> VisibleActors = new HashSet<ulong>();
             public float IngressCredits = 64f;
             public float MoveCredits = 12f;
@@ -110,9 +108,6 @@ namespace HeavyPockets
                 player.ActionCredits = previous.ActionCredits;
                 player.LastTransfer = previous.LastTransfer;
                 player.PouchLevel = previous.PouchLevel;
-                player.Style = previous.Style;
-                player.AcceptsStyledPoses = previous.AcceptsStyledPoses;
-                player.AcceptsModelPoses = previous.AcceptsModelPoses;
             }
             players[id] = player;
             loot.IssueKit(id, player.PouchLevel);
@@ -155,7 +150,7 @@ namespace HeavyPockets
         private static RaidEvent Pose(Player player) => new RaidEvent
         {
             Kind = RaidEventKind.Pose, Actor = player.Id, Position = player.Position, Yaw = player.Yaw,
-            Motion = player.Motion, Style = player.Style
+            Motion = player.Motion
         };
 
         private void SendInventory(Player player, RaidEventKind kind)
@@ -221,22 +216,6 @@ namespace HeavyPockets
             // The round acknowledgement arrives on the same ordered channel as input.
             // Commands sent before the client saw the new start cannot affect this raid.
             if (!player.Entered && !player.Exited) return;
-            if (command == RaidCommand.SetStyle)
-            {
-                if (bytes.Length != 3 && bytes.Length != 4) return;
-                int style = bytes[1] | (bytes[2] << 8);
-                if ((style & RunnerAppearance.ModelFlag) != 0 || RunnerAppearance.Normalize(style) != style) return;
-                if (bytes.Length == 4)
-                {
-                    if (bytes[3] > 1) return;
-                    player.AcceptsModelPoses = true;
-                    if (bytes[3] == 1) style |= RunnerAppearance.ModelFlag;
-                }
-                // Older clients never send a style, and keep receiving the original 31-byte poses.
-                player.AcceptsStyledPoses = true;
-                player.Style = style;
-                return;
-            }
             if (command == RaidCommand.Move)
             {
                 if (!player.Exited && player.MoveCredits >= 1f)
@@ -318,7 +297,7 @@ namespace HeavyPockets
             player.Direction = Vector2.ClampMagnitude(direction, 1f);
             player.Yaw = Mathf.Repeat(yaw, 360f);
             MoveButtons next = (MoveButtons)bytes[23];
-            player.Motion.Press(player.Position, player.Velocity, player.Yaw, player.Buttons, next, player.AcceptsStyledPoses);
+            player.Motion.Press(player.Position, player.Velocity, player.Yaw, player.Buttons, next);
             player.Buttons = next;
             player.Pitch = pitch;
             player.Aspect = aspect;
@@ -434,7 +413,10 @@ namespace HeavyPockets
             {
                 if (actor.Exited)
                     continue;
-                byte[] pose = null, modularPose = null, legacyPose = null;
+                byte[] pose = null;
+                float modelYaw = actor.Velocity.sqrMagnitude > .09f
+                    ? Mathf.Atan2(actor.Velocity.x, actor.Velocity.y) * Mathf.Rad2Deg
+                    : actor.Yaw;
                 foreach (Player recipient in players.Values)
                 {
                     if (recipient.Exited)
@@ -443,8 +425,8 @@ namespace HeavyPockets
                     if (recipient.Id != actor.Id)
                     {
                         if (!recipient.HasView || !actor.HasView ||
-                            !RaidMap.CanSeeRunner(recipient.View, actor.Position, actor.Yaw, actor.IdleSeconds >= .45f, actor.Motion) ||
-                            (recipient.CheckTravelView && !RaidMap.CanSeeRunner(recipient.TravelView, actor.Position, actor.Yaw, actor.IdleSeconds >= .45f, actor.Motion)))
+                            !RaidMap.CanSeeRunner(recipient.View, actor.Position, modelYaw, actor.IdleSeconds >= .45f, actor.Motion) ||
+                            (recipient.CheckTravelView && !RaidMap.CanSeeRunner(recipient.TravelView, actor.Position, modelYaw, actor.IdleSeconds >= .45f, actor.Motion)))
                         {
                             HideActor(recipient, actor.Id);
                             continue;
@@ -452,19 +434,7 @@ namespace HeavyPockets
                         if (recipient.VisibleActors.Add(actor.Id)) send = true;
                     }
                     if (send)
-                    {
-                        byte[] packet;
-                        if (!recipient.AcceptsStyledPoses)
-                            packet = legacyPose ??= RaidWire.Encode(Pose(actor), false);
-                        else if (!recipient.AcceptsModelPoses && (actor.Style & RunnerAppearance.ModelFlag) != 0)
-                        {
-                            var appearance = Pose(actor);
-                            appearance.Style &= ~RunnerAppearance.ModelFlag;
-                            packet = modularPose ??= RaidWire.Encode(appearance);
-                        }
-                        else packet = pose ??= RaidWire.Encode(Pose(actor));
-                        RaidWire.Send(net, recipient.Id, RaidWire.Events, packet, audit);
-                    }
+                        RaidWire.Send(net, recipient.Id, RaidWire.Events, pose ??= RaidWire.Encode(Pose(actor)), audit);
                 }
             }
         }

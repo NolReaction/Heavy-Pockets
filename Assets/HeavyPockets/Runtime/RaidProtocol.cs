@@ -9,7 +9,7 @@ namespace HeavyPockets
 {
     public enum RaidEventKind : byte { Pose = 1, Left, Crate, Bag, Result, Status, ExitProgress, RaidStarted, RaidQueue, Gear, PouchLevel }
     public enum RaidStatus : byte { Opened = 1, Blocked, Closed, Taken, Empty, Denied, OutOfRange, AlreadyExited, CrateLost, Stored, BagFull, Placed, NoSpace, Stale }
-    internal enum RaidCommand : byte { Move = 1, Open, Close, Take, Store, Place, NextRaid, EnterRaid, MoveGear, SelectGear, SetPouchLevel, EnterBase, SetStyle }
+    internal enum RaidCommand : byte { Move = 1, Open, Close, Take, Store, Place, NextRaid, EnterRaid, MoveGear, SelectGear, SetPouchLevel, EnterBase }
 
     public struct RaidEvent
     {
@@ -18,7 +18,6 @@ namespace HeavyPockets
         public Vector2 Position;
         public float Yaw;
         public RaidLocomotion Motion;
-        public int Style;
         public float Seconds;
         public LootItem[] Items, Gear;
         public GearLocation ActiveGear;
@@ -78,14 +77,13 @@ namespace HeavyPockets
             }
         }
 
-        public static byte[] Encode(RaidEvent message, bool extendedPose = true)
+        public static byte[] Encode(RaidEvent message)
         {
             byte[] bytes;
             switch (message.Kind)
             {
                 case RaidEventKind.Pose:
-                    bool styled = extendedPose && (message.Style != RunnerAppearance.LegacyStyle || message.Motion.Sliding);
-                    bytes = new byte[styled ? 33 : 31];
+                    bytes = new byte[31];
                     PutActor(bytes, message.Actor);
                     Put(bytes, 9, message.Position.x);
                     Put(bytes, 13, message.Position.y);
@@ -93,12 +91,7 @@ namespace HeavyPockets
                     Put(bytes, 21, message.Motion.Height);
                     Put(bytes, 25, message.Motion.VerticalSpeed);
                     bytes[29] = (byte)Mathf.RoundToInt(Mathf.Clamp01(message.Motion.Crouch) * 255f);
-                    bytes[30] = styled && message.Motion.Sliding ? (byte)2 : message.Motion.Sprinting ? (byte)1 : (byte)0;
-                    if (styled)
-                    {
-                        bytes[31] = (byte)(message.Style & 255);
-                        bytes[32] = (byte)(message.Style >> 8);
-                    }
+                    bytes[30] = message.Motion.Sliding ? (byte)2 : message.Motion.Sprinting ? (byte)1 : (byte)0;
                     break;
                 case RaidEventKind.Left:
                     bytes = new byte[9];
@@ -188,18 +181,17 @@ namespace HeavyPockets
             message.Kind = (RaidEventKind)bytes[0];
             switch (message.Kind)
             {
-                case RaidEventKind.Pose when bytes.Length == 31 || bytes.Length == 33:
+                case RaidEventKind.Pose when bytes.Length == 31:
                     message.Actor = BitConverter.ToUInt64(bytes, 1);
                     message.Position = new Vector2(BitConverter.ToSingle(bytes, 9), BitConverter.ToSingle(bytes, 13));
                     message.Yaw = BitConverter.ToSingle(bytes, 17);
                     message.Motion = new RaidLocomotion { Height = BitConverter.ToSingle(bytes, 21),
                         VerticalSpeed = BitConverter.ToSingle(bytes, 25), Crouch = bytes[29] / 255f,
                         Sprinting = bytes[30] == 1, Sliding = bytes[30] == 2 };
-                    message.Style = bytes.Length == 33 ? bytes[31] | (bytes[32] << 8) : RunnerAppearance.LegacyStyle;
                     return Finite(message.Position.x) && Finite(message.Position.y) && Finite(message.Yaw) &&
                         message.Motion.Height >= 0f && message.Motion.Height <= 1f &&
-                        Mathf.Abs(message.Motion.VerticalSpeed) <= 5f && bytes[30] <= (bytes.Length == 33 ? 2 : 1) &&
-                        (!message.Motion.Sliding || !message.Motion.Airborne) && message.Style == RunnerAppearance.Normalize(message.Style);
+                        Mathf.Abs(message.Motion.VerticalSpeed) <= 5f && bytes[30] <= 2 &&
+                        (!message.Motion.Sliding || !message.Motion.Airborne);
                 case RaidEventKind.Left when bytes.Length == 9:
                     message.Actor = BitConverter.ToUInt64(bytes, 1);
                     return true;
@@ -400,15 +392,6 @@ namespace HeavyPockets
         public void Open() => Send(new[] { (byte)RaidCommand.Open });
         public void Close() => Send(new[] { (byte)RaidCommand.Close });
         public void EnterBase() => Send(new[] { (byte)RaidCommand.EnterBase });
-        internal void SetStyle(int style)
-        {
-            style = RunnerAppearance.Normalize(style);
-            byte low = (byte)(style & 255);
-            byte high = (byte)((style & ~RunnerAppearance.ModelFlag) >> 8);
-            // Old servers consume the modular outfit and ignore the longer message.
-            Send(new[] { (byte)RaidCommand.SetStyle, low, high });
-            Send(new[] { (byte)RaidCommand.SetStyle, low, high, (byte)RunnerAppearance.Get(style, RunnerAppearance.ModelCategory) });
-        }
         public void SetPouchLevel(byte level)
         {
             if (level >= 1 && level <= 4) Send(new[] { (byte)RaidCommand.SetPouchLevel, level });

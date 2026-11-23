@@ -1,0 +1,15 @@
+Unity Starter Assets — Third Person Armature
+Copyright © 2021 Unity Technologies
+
+Source: Unity Technologies, Multiplayer Bitesize Samples / Basic / ClientDriven
+https://github.com/Unity-Technologies/com.unity.multiplayer.samples.bitesize/tree/215156271b77e451c36a90410dee8a641e3e89b9/Basic/ClientDriven/Assets/StarterAssets
+
+Licensed under the Unity Companion License for Unity-dependent projects.
+https://unity.com/legal/licenses/unity-companion-license
+
+The Armature model and animation FBXs are intact. The included controller
+omits disconnected Fly objects. The original colour, normal, metallic
+and emissive maps are assigned to Built-in Standard materials for this project.
+
+This package is licensed under the Unity Companion License.
+For full license terms, please see: https://unity3d.com/legal/licenses/Unity_Companion_License

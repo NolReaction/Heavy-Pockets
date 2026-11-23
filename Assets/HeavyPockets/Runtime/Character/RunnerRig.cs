@@ -1,26 +1,24 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace HeavyPockets
 {
     internal sealed class RunnerRig
     {
-        private readonly Dictionary<string, Transform> bones = new Dictionary<string, Transform>(StringComparer.Ordinal);
         internal readonly Animator Animator;
 
         internal RunnerRig(GameObject model)
         {
             Animator = model.GetComponentInChildren<Animator>(true);
-            if (Animator == null) Animator = model.AddComponent<Animator>();
-            foreach (Transform node in Animator.GetComponentsInChildren<Transform>(true))
-                bones[node.name] = node;
+            if (Animator == null || Animator.avatar == null || !Animator.avatar.isHuman || !Animator.avatar.isValid)
+                throw new InvalidOperationException("The Unity Starter Assets character needs a valid Humanoid avatar.");
         }
 
-        internal Transform Bone(string name)
+        internal Transform Bone(HumanBodyBones name)
         {
-            if (bones.TryGetValue(name, out var bone)) return bone;
-            throw new InvalidOperationException("Runner is missing the bone " + name + ".");
+            var bone = Animator.GetBoneTransform(name);
+            if (bone != null) return bone;
+            throw new InvalidOperationException("The Unity Starter Assets avatar is missing " + name + ".");
         }
     }
 }

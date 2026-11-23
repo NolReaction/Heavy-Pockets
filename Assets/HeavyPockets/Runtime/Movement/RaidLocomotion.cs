@@ -16,12 +16,11 @@ namespace HeavyPockets
         internal float EyeOffset => Height - CrouchEyeDrop * Crouch;
 
         // Button edges arrive on the ordered movement channel, sometimes twice between physics ticks.
-        internal void Press(Vector2 position, Vector2 velocity, float yaw, MoveButtons previous, MoveButtons next,
-            bool allowSlide = true)
+        internal void Press(Vector2 position, Vector2 velocity, float yaw, MoveButtons previous, MoveButtons next)
         {
             if (Airborne) return;
             bool crouch = (next & MoveButtons.Crouch) != 0;
-            bool wantsSlide = allowSlide && crouch && (next & MoveButtons.Sprint) != 0 && (previous & MoveButtons.Crouch) == 0;
+            bool wantsSlide = crouch && (next & MoveButtons.Sprint) != 0 && (previous & MoveButtons.Crouch) == 0;
             if (wantsSlide && Sprinting && velocity.sqrMagnitude >= MinSlideEntry * MinSlideEntry &&
                 ForwardFraction(velocity.normalized, yaw) > .35f)
             {

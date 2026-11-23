@@ -45,18 +45,18 @@ namespace HeavyPockets
             var endOfFrame = new WaitForEndOfFrame();
             var rig = Client.ProbeLocalBody.GetComponent<FreightRunnerGait>().Rig;
             var skins = Client.ProbeLocalBody.GetComponentsInChildren<SkinnedMeshRenderer>();
-            var hips = rig.Bone("pelvis");
-            var chest = rig.Bone("spine_03");
-            var leftHip = rig.Bone("thigh_l");
-            var rightHip = rig.Bone("thigh_r");
-            var leftKnee = rig.Bone("calf_l");
-            var rightKnee = rig.Bone("calf_r");
-            var leftFoot = rig.Bone("foot_l");
-            var rightFoot = rig.Bone("foot_r");
-            var leftArm = rig.Bone("upperarm_l");
-            var rightArm = rig.Bone("upperarm_r");
-            var leftHand = rig.Bone("hand_l");
-            var rightHand = rig.Bone("hand_r");
+            var hips = rig.Bone(HumanBodyBones.Hips);
+            var chest = rig.Bone(HumanBodyBones.UpperChest);
+            var leftHip = rig.Bone(HumanBodyBones.LeftUpperLeg);
+            var rightHip = rig.Bone(HumanBodyBones.RightUpperLeg);
+            var leftKnee = rig.Bone(HumanBodyBones.LeftLowerLeg);
+            var rightKnee = rig.Bone(HumanBodyBones.RightLowerLeg);
+            var leftFoot = rig.Bone(HumanBodyBones.LeftFoot);
+            var rightFoot = rig.Bone(HumanBodyBones.RightFoot);
+            var leftArm = rig.Bone(HumanBodyBones.LeftUpperArm);
+            var rightArm = rig.Bone(HumanBodyBones.RightUpperArm);
+            var leftHand = rig.Bone(HumanBodyBones.LeftHand);
+            var rightHand = rig.Bone(HumanBodyBones.RightHand);
             var baked = new Mesh();
             var vertices = new List<Vector3>();
             float nextSoleSample = 1.94f, maxGap = 0f, minGap = float.PositiveInfinity;
@@ -152,7 +152,7 @@ namespace HeavyPockets
                         File.WriteAllBytes(Path.Combine(path, name), pixels.EncodeToJPG(90));
                         if (t >= 12.35f && !portraitSaved)
                         {
-                            Vector3 portraitFocus = rig.Bone("Head").position - Vector3.up * .21f;
+                            Vector3 portraitFocus = rig.Bone(HumanBodyBones.Head).position - Vector3.up * .21f;
                             sample.transform.position = portraitFocus + body.forward * 1.36f + body.right * .47f + Vector3.up * .11f;
                             sample.transform.LookAt(portraitFocus);
                             try

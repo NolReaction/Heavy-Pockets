@@ -2,20 +2,19 @@ using UnityEngine;
 
 namespace HeavyPockets
 {
-    internal enum RaidScreen { Play, Menu, Wardrobe, Receipt, Base }
-    internal enum RaidMenuAction { Resume, Bag, Wardrobe, Base, Join, CancelQueue, Quit, Pouch1, Pouch2, Pouch3, Pouch4,
+    internal enum RaidScreen { Play, Menu, Animations, Receipt, Base }
+    internal enum RaidMenuAction { Resume, Bag, Animations, Base, Join, CancelQueue, Quit, Pouch1, Pouch2, Pouch3, Pouch4,
         HarborDaylight, HarborPoster, HarborDusk }
 
     public sealed partial class RaidClient
     {
         private byte basePouchLevel = 1;
-        private bool InPauseMenu => screen == RaidScreen.Menu || screen == RaidScreen.Wardrobe;
+        private bool InPauseMenu => screen == RaidScreen.Menu || screen == RaidScreen.Animations;
 
-        private void LeaveWardrobe(bool apply)
+        private void LeaveAnimationPreview()
         {
-            if (screen != RaidScreen.Wardrobe) return;
-            if (apply) SaveStyle(hud.WardrobeStyle);
-            hud.CloseWardrobe();
+            if (screen != RaidScreen.Animations) return;
+            hud.CloseAnimationPreview();
             screen = RaidScreen.Menu;
             hud.ResetMenuInput();
         }
@@ -23,7 +22,7 @@ namespace HeavyPockets
         internal void EscapePressed()
         {
             if (disconnected || !HasOwnPose) return;
-            if (screen == RaidScreen.Wardrobe) { LeaveWardrobe(false); return; }
+            if (screen == RaidScreen.Animations) { LeaveAnimationPreview(); return; }
             if (screen == RaidScreen.Receipt) { UseMenu(RaidMenuAction.Base); return; }
             if (screen == RaidScreen.Menu) { UseMenu(RaidMenuAction.Resume); return; }
             if (screen != RaidScreen.Play || extracted) return;
@@ -55,9 +54,9 @@ namespace HeavyPockets
             }
             switch (action)
             {
-                case RaidMenuAction.Wardrobe when screen == RaidScreen.Menu:
-                    hud.OpenWardrobe(SelectedStyle, view != null, LeaveWardrobe);
-                    screen = RaidScreen.Wardrobe;
+                case RaidMenuAction.Animations when screen == RaidScreen.Menu:
+                    hud.OpenAnimationPreview(view != null, LeaveAnimationPreview);
+                    screen = RaidScreen.Animations;
                     break;
                 case RaidMenuAction.Resume when screen == RaidScreen.Menu:
                     screen = RaidScreen.Play;
@@ -91,10 +90,10 @@ namespace HeavyPockets
         internal bool ProbeCanJoin => screen == RaidScreen.Base && !queued && !changingQueue;
         internal uint ProbeRound => round;
         internal bool ProbeMenuClick(RaidMenuAction action) => ScriptedInput && hud.ProbeMenuClick(InventoryState(), action);
-        internal int ProbeWardrobeStyle => hud.WardrobeStyle;
-        internal void ProbeWardrobeKey(int rowStep, int change, bool enter = false)
+        internal StarterMotion ProbeAnimation => hud.PreviewMotion;
+        internal void ProbeAnimationKey(int switchClip)
         {
-            if (ScriptedInput && screen == RaidScreen.Wardrobe) hud.WardrobeKey(rowStep, change, enter);
+            if (ScriptedInput && screen == RaidScreen.Animations) hud.AnimationPreviewKey(switchClip, 0, false);
         }
 #endif
     }

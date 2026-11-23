@@ -46,8 +46,8 @@ namespace HeavyPockets
             bool inventoryVisible = state.Connected && !state.Disconnected && state.Screen == RaidScreen.Play && state.Inventory;
             if (inventoryVisible && !showingInventory) openingTime = Time.unscaledTime;
             showingInventory = inventoryVisible;
-            if (state.Connected && !state.Disconnected && state.Screen == RaidScreen.Wardrobe)
-                DrawWardrobe(width, height);
+            if (state.Connected && !state.Disconnected && state.Screen == RaidScreen.Animations)
+                DrawAnimationPreview(width, height);
             else if (state.Disconnected || !state.Connected || state.Screen != RaidScreen.Play)
                 DrawSessionScreen(state, width, height);
             else if (state.Inventory)

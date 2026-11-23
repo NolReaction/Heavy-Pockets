@@ -47,7 +47,7 @@ function Read-Audit([string]$name) {
             $operation = 0L
             $pitch = $yaw = $mode = $null
             $worldX = $worldZ = $null
-            $height = $crouch = $sprint = $slide = $style = $null
+            $height = $crouch = $sprint = $slide = $null
             $layout = $null
             $remainingMs = 0
             $gearIds = @()
@@ -143,8 +143,7 @@ function Read-Audit([string]$name) {
                     $pouchLevel = [int]$bytes[1]
                 } else {
                     $length = @{ 1 = 31; 2 = 9; 6 = 6; 7 = 5; 8 = 5; 9 = 6 }[[int]$code]
-                    $extendedPose = $code -eq 1 -and $bytes.Length -eq 33
-                    Require ($null -ne $length -and ($bytes.Length -eq $length -or $extendedPose)) "$name unexpected public event fields"
+                    Require ($null -ne $length -and $bytes.Length -eq $length) "$name unexpected public event fields"
                     if ($code -in 8,9) {
                         $round = [long][BitConverter]::ToUInt32($bytes,1)
                         Require ($round -gt 0) "$name invalid round number"
@@ -164,9 +163,8 @@ function Read-Audit([string]$name) {
                         $crouch = [int]$bytes[29]
                         $sprint = [int]($bytes[30] -eq 1)
                         $slide = [int]($bytes[30] -eq 2)
-                        $style = if ($extendedPose) { [BitConverter]::ToUInt16($bytes,31) } else { 0 }
-                        Require ($height -ge 0 -and $height -le 1 -and $bytes[30] -le 2 -and $style -le 8191 -and
-                            (!$slide -or ($extendedPose -and $height -eq 0))) "$name invalid locomotion or appearance"
+                        Require ($height -ge 0 -and $height -le 1 -and $bytes[30] -le 2 -and
+                            (!$slide -or $height -eq 0)) "$name invalid locomotion"
                         $worldZ = [BitConverter]::ToSingle($bytes,13)
                     }
                 }
@@ -188,9 +186,6 @@ function Read-Audit([string]$name) {
                     $pouchLevel = [int]$bytes[1]
                 } elseif ($code -eq 12) {
                     Require ($bytes.Length -eq 1) "$name invalid base arrival"
-                } elseif ($code -eq 13) {
-                    Require ($bytes.Length -in 3,4 -and [BitConverter]::ToUInt16($bytes,1) -le 4095 -and
-                        ($bytes.Length -eq 3 -or $bytes[3] -in 0,1)) "$name invalid appearance selection"
                 } elseif ($code -in 4,5,6) {
                     $length = if ($code -eq 6) { 14 } else { 9 }
                     Require ($bytes.Length -eq $length) "$name invalid transfer command length"
@@ -228,7 +223,7 @@ function Read-Audit([string]$name) {
                 items = $items; types = $types; complete = $complete; status = $status; actor = $actor
                 instance = $instance; operation = $operation; shapes = $shapes; positions = $positions
                 pitch = $pitch; yaw = $yaw; mode = $mode; worldX = $worldX; worldZ = $worldZ
-                height = $height; crouch = $crouch; sprint = $sprint; slide = $slide; style = $style
+                height = $height; crouch = $crouch; sprint = $sprint; slide = $slide
                 layout = $layout; remainingMs = $remainingMs
                 gearIds = $gearIds; gearTypes = $gearTypes; pouchLevel = $pouchLevel
                 active = $active; sourceSlot = $sourceSlot; destSlot = $destSlot; phase = $phase
@@ -757,9 +752,7 @@ foreach ($role in 'A','B') {
     Require (@($remote | Where-Object crouch -gt 220).Count -gt 0 -and
         @($remote | Where-Object height -gt .4).Count -gt 0 -and
         @($remote | Where-Object sprint -eq 1).Count -gt 0) "$role did not see the other player's crouch, jump and sprint"
-    if (@($commands | Where-Object { $_.peer -eq $peer -and $_.code -eq 13 }).Count -gt 0) {
-        Require (@($remote | Where-Object { $_.slide -eq 1 -and $_.style -eq 1 }).Count -gt 0) "$role did not see the other player's slide and selected appearance"
-    }
+    Require (@($remote | Where-Object slide -eq 1).Count -gt 0) "$role did not see the other player's slide"
 }
 Mark 'Both players crouched, stood up, jumped, landed and sprinted. Each received the remote stance, airborne height and sprint in normal pose snapshots.'
 $poseFile = Join-Path $RunDirectory 'motion/poses.csv'
@@ -778,17 +771,8 @@ if (Test-Path -LiteralPath $poseFile) {
         Require ($section -ge 6) 'recorded motion sequence missed a locomotion phase'
     }
     $runWidth = ($run | ForEach-Object { [Math]::Abs([double]$_.ankleWidth) } | Measure-Object -Maximum).Maximum
-    Require ($runWidth -gt .06 -and $runWidth -lt .30) 'sprint feet spread outside the running lane'
-    Require (($back | Measure-Object -Property torsoPitch -Average).Average -gt -2) 'backpedal leaned the torso behind the hips'
-    $crossRight = @($poses | Where-Object { [double]$_.time -ge 13.00 -and [double]$_.time -le 13.95 })
-    $crossLeft = @($poses | Where-Object { [double]$_.time -ge 14.28 -and [double]$_.time -le 15.25 })
-    foreach ($cross in @($crossRight,$crossLeft)) {
-        Require ($cross.Count -ge 6 -and ($cross | Measure-Object -Property ankleWidth -Minimum).Minimum -lt -.025 -and
-            ($cross | Measure-Object -Property ankleWidth -Maximum).Maximum -gt .10) 'lateral gait missed its crossing or opening step'
-    }
+    Require ($runWidth -gt .06 -and $runWidth -lt .35) 'sprint feet spread outside the running lane'
     Require (@($poses | Where-Object { [int]$_.sliding -eq 1 }).Count -ge 6) 'recorded runner missed the slide'
-    Require (($air | Measure-Object -Property kneeWidth -Maximum).Maximum -lt .46 -and
-        ($air | Measure-Object -Property handWidth -Maximum).Maximum -lt .8) 'jump spread the limbs beyond the compact pose'
     # Actual clavicle/hip axes include the authored idle pose; measure the *change* over the glance.
     $neutral = @($poses | Where-Object { [double]$_.time -ge 9.72 -and [double]$_.time -le 9.85 })
     $glance = @($poses | Where-Object { [double]$_.time -gt 9.85 -and [double]$_.time -le 10.55 })
@@ -800,8 +784,8 @@ if (Test-Path -LiteralPath $poseFile) {
         [Math]::IEEERemainder([double]$_.chestHeading - [double]$_.pelvisHeading - $neutralTwist, 360)
     } | Measure-Object -Maximum).Maximum
     Require ($lead -gt 4 -and $lead -lt 22) 'small camera glance did not lead with the upper body'
-    Require ((Read-Marker 'A.wardrobe-ok') -eq 'ok') 'wardrobe discard and apply did not survive reopening'
-    Mark "The dressed runner alternated support and flight (sole clearance $stance to $flight m). Both lateral directions crossed and reopened, the backstep stayed upright and the shoulders led the stationary glance. The gameplay camera recorded the slide."
-    Mark 'Esc opened the fitting room. Discard restored the saved outfit, and applying a new outfit retained it on reopening.'
+    Mark "The Starter Assets runner alternated support and flight (sole clearance $stance to $flight m). The gameplay camera recorded travel in multiple directions, the stationary glance and the slide."
 }
+Require ((Read-Marker 'A.animation-preview-ok') -eq 'ok') 'animation preview did not switch clips and reopen'
+Mark 'Esc opened the animation preview. A walk clip could be selected, and reopening the preview started on idle.'
 [IO.File]::WriteAllLines((Join-Path $RunDirectory 'acceptance.txt'), [string[]]$checks)

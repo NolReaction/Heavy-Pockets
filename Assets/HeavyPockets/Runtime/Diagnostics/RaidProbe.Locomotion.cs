@@ -11,8 +11,6 @@ namespace HeavyPockets
             float sign = role == "A" ? -1f : 1f;
             float yaw = sign > 0f ? 90f : 270f;
             yield return Walk(new Vector2(-sign * 4.7f, 2.7f), yaw);
-            int previousStyle = Client.SelectedStyle;
-            Client.SaveStyle(1);
             Phase("two players face each other for locomotion checks");
             Signal("motion-ready");
             yield return new WaitUntil(() => Exists("A.motion-ready") && Exists("B.motion-ready"));
@@ -53,7 +51,6 @@ namespace HeavyPockets
             { Fail("Slide did not carry momentum into a crouch"); yield break; }
             Client.SetProbeMotion(Vector2.zero, yaw, 0f);
             yield return new WaitUntil(() => Client.OwnMotion.Crouch < .05f);
-            Client.SaveStyle(previousStyle);
             Signal("motion-ok");
             yield return new WaitUntil(() => Exists("A.motion-ok") && Exists("B.motion-ok"));
         }

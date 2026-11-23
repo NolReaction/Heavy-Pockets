@@ -6,7 +6,6 @@ namespace HeavyPockets
     internal sealed partial class RaidScenery
     {
         private readonly List<Mesh> propMeshes = new List<Mesh>();
-        private GameObject runnerPrefab;
         private Material contactShadow;
 
         private Renderer GroundContact(Transform parent, float width, float depth)
@@ -75,15 +74,13 @@ namespace HeavyPockets
             p.Apply(model, propMeshes);
         }
 
-        internal Transform InstantiatePlayer(ulong id, Vector3 position, float yaw, int style = RunnerAppearance.DefaultStyle)
+        internal Transform InstantiatePlayer(ulong id, Vector3 position, float yaw)
         {
-            if (runnerPrefab == null) runnerPrefab = Resources.Load<GameObject>(RunnerAppearance.ResourcePath);
             var actor = Child(root, "Runner " + id, position);
             actor.gameObject.SetActive(false);
             actor.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
-            var model = Object.Instantiate(runnerPrefab, actor, false);
+            var model = StarterRunner.Instantiate(actor);
             var rig = new RunnerRig(model);
-            RunnerAppearance.Apply(model, style);
             Renderer shadow = GroundContact(actor, 1.7f, 1.9f);
             shadow.gameObject.AddComponent<RunnerContactShadow>().Bind(rig);
             actor.gameObject.AddComponent<FreightRunnerGait>().Bind(rig);

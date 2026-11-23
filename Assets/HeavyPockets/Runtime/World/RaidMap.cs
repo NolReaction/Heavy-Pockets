@@ -149,79 +149,32 @@ namespace HeavyPockets
                 && ClipAxis(local.z, direction.z, half.z, ref first, ref length);
         }
 
-        // Interior torso and head samples follow the shared moving silhouette.
-        // Feet and swinging arms are sampled only once the runner comes to rest.
-        private static readonly Vector3[] StridingSamples =
+        // Points inset from the core silhouette of the 1.76 m Unity Armature.
+        // Moving limbs are excluded from the visibility test while the animation is blending.
+        private static readonly Vector3[] TorsoSamples =
         {
-            new Vector3(0, 1.26f, 0), new Vector3(-.14f, 1.26f, 0), new Vector3(.14f, 1.26f, 0),
-            new Vector3(-.13f, 1.34f, -.02f), new Vector3(.13f, 1.34f, -.02f), new Vector3(0, 1.24f, -.07f),
-            new Vector3(0, 1.24f, .07f), new Vector3(0, 1.07f, 0), new Vector3(-.095f, 1.07f, 0),
-            new Vector3(.095f, 1.07f, 0), new Vector3(0, 1.58f, .039f), new Vector3(-.046f, 1.58f, .039f),
-            new Vector3(.046f, 1.58f, .039f)
+            new Vector3(0f, 1.63f, 0f),
+            new Vector3(-.055f, 1.60f, .025f), new Vector3(.055f, 1.60f, .025f),
+            new Vector3(0f, 1.34f, 0f),
+            new Vector3(-.135f, 1.32f, 0f), new Vector3(.135f, 1.32f, 0f),
+            new Vector3(0f, 1.30f, -.07f), new Vector3(0f, 1.30f, .07f),
+            new Vector3(-.10f, 1.12f, 0f), new Vector3(.10f, 1.12f, 0f),
+            new Vector3(0f, .98f, 0f)
         };
 
-        // Inset support points at ankle, shin, hand, pelvis, elbow, shoulder and
-        // head height, measured from the skinned 180 cm FBX in its relaxed pose.
-        private static readonly Vector3[] StandingSamples =
+        private static readonly Vector3[] RestingLegSamples =
         {
-            new Vector3(-0.211f, 0.075f, 0.096f), new Vector3(-0.232f, 0.075f, 0.100f), new Vector3(-0.258f, 0.075f, 0.219f),
-            new Vector3(-0.241f, 0.075f, 0.282f), new Vector3(-0.197f, 0.075f, 0.315f), new Vector3(0.172f, 0.075f, -0.301f),
-            new Vector3(0.299f, 0.075f, -0.221f), new Vector3(0.313f, 0.075f, -0.175f), new Vector3(0.297f, 0.075f, -0.136f),
-            new Vector3(0.298f, 0.075f, -0.137f), new Vector3(-0.192f, 0.430f, 0.082f), new Vector3(-0.248f, 0.430f, 0.111f),
-            new Vector3(-0.254f, 0.430f, 0.112f), new Vector3(-0.227f, 0.430f, 0.167f), new Vector3(-0.208f, 0.430f, 0.182f),
-            new Vector3(0.216f, 0.430f, -0.259f), new Vector3(0.234f, 0.430f, -0.246f), new Vector3(0.247f, 0.430f, -0.201f),
-            new Vector3(0.235f, 0.430f, -0.164f), new Vector3(0.174f, 0.430f, -0.152f), new Vector3(-0.027f, 0.830f, -0.076f),
-            new Vector3(-0.313f, 0.830f, -0.007f), new Vector3(-0.326f, 0.830f, 0.019f), new Vector3(-0.333f, 0.830f, 0.013f),
-            new Vector3(-0.109f, 0.830f, 0.150f), new Vector3(0.257f, 0.830f, -0.174f), new Vector3(0.263f, 0.830f, -0.172f),
-            new Vector3(0.277f, 0.830f, -0.140f), new Vector3(0.215f, 0.830f, -0.010f), new Vector3(0.015f, 0.830f, 0.079f),
-            new Vector3(-0.003f, 1.040f, -0.131f), new Vector3(-0.299f, 1.040f, -0.092f), new Vector3(-0.310f, 1.040f, -0.062f),
-            new Vector3(-0.312f, 1.040f, -0.050f), new Vector3(-0.011f, 1.040f, 0.080f), new Vector3(0.216f, 1.040f, -0.264f),
-            new Vector3(0.237f, 1.040f, -0.242f), new Vector3(0.242f, 1.040f, -0.211f), new Vector3(0.140f, 1.040f, 0.010f),
-            new Vector3(0.013f, 1.040f, 0.081f), new Vector3(-0.003f, 1.240f, -0.167f), new Vector3(-0.264f, 1.240f, -0.115f),
-            new Vector3(-0.275f, 1.240f, -0.081f), new Vector3(-0.250f, 1.240f, -0.052f), new Vector3(-0.020f, 1.240f, 0.043f),
-            new Vector3(0.159f, 1.240f, -0.290f), new Vector3(0.201f, 1.240f, -0.266f), new Vector3(0.207f, 1.240f, -0.203f),
-            new Vector3(0.112f, 1.240f, -0.019f), new Vector3(0.001f, 1.240f, 0.047f), new Vector3(-0.009f, 1.420f, -0.168f),
-            new Vector3(-0.214f, 1.420f, -0.092f), new Vector3(-0.225f, 1.420f, -0.049f), new Vector3(-0.209f, 1.420f, -0.007f),
-            new Vector3(-0.064f, 1.420f, 0.030f), new Vector3(0.131f, 1.420f, -0.214f), new Vector3(0.189f, 1.420f, -0.184f),
-            new Vector3(0.202f, 1.420f, -0.136f), new Vector3(0.184f, 1.420f, -0.099f), new Vector3(0.064f, 1.420f, 0.009f),
-            new Vector3(-0.009f, 1.610f, -0.069f), new Vector3(-0.074f, 1.610f, -0.005f), new Vector3(-0.061f, 1.610f, -0.017f),
-            new Vector3(-0.028f, 1.610f, 0.054f), new Vector3(-0.004f, 1.610f, 0.070f), new Vector3(0.021f, 1.610f, -0.074f),
-            new Vector3(0.088f, 1.610f, -0.032f), new Vector3(0.086f, 1.610f, -0.038f), new Vector3(0.059f, 1.610f, 0.055f),
-            new Vector3(0.029f, 1.610f, 0.099f), new Vector3(0.004f, 1.745f, -0.009f),
-        };
-
-        private static readonly Vector3[] CrouchingSamples =
-        {
-            new Vector3(-0.258f, 0.070f, 0.114f), new Vector3(-0.281f, 0.070f, 0.125f), new Vector3(-0.327f, 0.070f, 0.261f),
-            new Vector3(-0.319f, 0.070f, 0.287f), new Vector3(-0.290f, 0.070f, 0.315f), new Vector3(-0.258f, 0.270f, 0.122f),
-            new Vector3(-0.286f, 0.270f, 0.141f), new Vector3(-0.287f, 0.270f, 0.150f), new Vector3(-0.270f, 0.270f, 0.184f),
-            new Vector3(-0.262f, 0.270f, 0.186f), new Vector3(0.233f, 0.270f, -0.444f), new Vector3(0.241f, 0.270f, -0.437f),
-            new Vector3(0.268f, 0.270f, -0.364f), new Vector3(0.257f, 0.270f, -0.326f), new Vector3(0.231f, 0.270f, -0.314f),
-            new Vector3(-0.435f, 0.460f, -0.258f), new Vector3(-0.460f, 0.460f, -0.241f), new Vector3(-0.441f, 0.460f, -0.269f),
-            new Vector3(-0.278f, 0.460f, 0.167f), new Vector3(-0.240f, 0.460f, 0.188f), new Vector3(0.044f, 0.460f, -0.274f),
-            new Vector3(0.324f, 0.460f, -0.084f), new Vector3(0.313f, 0.460f, -0.099f), new Vector3(0.301f, 0.460f, -0.085f),
-            new Vector3(0.154f, 0.460f, 0.024f), new Vector3(0.001f, 0.610f, -0.313f), new Vector3(-0.444f, 0.610f, -0.231f),
-            new Vector3(-0.437f, 0.610f, -0.240f), new Vector3(-0.236f, 0.610f, 0.161f), new Vector3(-0.219f, 0.610f, 0.177f),
-            new Vector3(0.054f, 0.610f, -0.316f), new Vector3(0.317f, 0.610f, -0.119f), new Vector3(0.315f, 0.610f, -0.119f),
-            new Vector3(0.311f, 0.610f, -0.107f), new Vector3(0.255f, 0.610f, -0.073f), new Vector3(-0.397f, 0.790f, -0.229f),
-            new Vector3(-0.403f, 0.790f, -0.224f), new Vector3(-0.411f, 0.790f, -0.199f), new Vector3(-0.405f, 0.790f, -0.184f),
-            new Vector3(-0.101f, 0.790f, -0.023f), new Vector3(0.250f, 0.790f, -0.207f), new Vector3(0.265f, 0.790f, -0.200f),
-            new Vector3(0.277f, 0.790f, -0.175f), new Vector3(0.261f, 0.790f, -0.128f), new Vector3(0.007f, 0.790f, -0.065f),
-            new Vector3(-0.016f, 0.910f, -0.187f), new Vector3(-0.342f, 0.910f, -0.147f), new Vector3(-0.367f, 0.910f, -0.100f),
-            new Vector3(-0.323f, 0.910f, 0.008f), new Vector3(-0.090f, 0.910f, 0.301f), new Vector3(0.177f, 0.910f, -0.189f),
-            new Vector3(0.219f, 0.910f, -0.178f), new Vector3(0.223f, 0.910f, -0.170f), new Vector3(0.121f, 0.910f, -0.005f),
-            new Vector3(0.001f, 0.910f, 0.063f), new Vector3(-0.011f, 1.040f, -0.049f), new Vector3(-0.176f, 1.040f, -0.036f),
-            new Vector3(-0.188f, 1.040f, -0.023f), new Vector3(-0.128f, 1.040f, 0.317f), new Vector3(-0.093f, 1.040f, 0.338f),
-            new Vector3(0.005f, 1.040f, -0.047f), new Vector3(0.001f, 1.040f, -0.050f), new Vector3(0.011f, 1.040f, -0.013f),
-            new Vector3(0.013f, 1.040f, -0.019f), new Vector3(0.002f, 1.040f, -0.016f), new Vector3(-0.081f, 1.083f, 0.273f),
+            new Vector3(-.095f, .77f, 0f), new Vector3(.095f, .77f, 0f),
+            new Vector3(-.10f, .46f, .01f), new Vector3(.10f, .46f, .01f),
+            new Vector3(-.10f, .16f, .02f), new Vector3(.10f, .16f, .02f)
         };
 
         internal static bool CanSeeRunner(RaidView view, Vector2 actor, float yaw, bool standing, RaidLocomotion motion = default)
         {
             float sin = Mathf.Sin(yaw * Mathf.Deg2Rad), cos = Mathf.Cos(yaw * Mathf.Deg2Rad);
-            if (standing && !motion.Airborne && (motion.Crouch < .02f || motion.Crouch > .98f))
-                return SeesSamples(view, actor, sin, cos, motion.Crouch > .5f ? CrouchingSamples : StandingSamples, motion.Height);
-            return SeesSamples(view, actor, sin, cos, StridingSamples, motion.EyeOffset);
+            return SeesSamples(view, actor, sin, cos, TorsoSamples, motion.EyeOffset) ||
+                (standing && !motion.Airborne && motion.Crouch < .02f &&
+                 SeesSamples(view, actor, sin, cos, RestingLegSamples, 0f));
         }
 
         private static bool SeesSamples(RaidView view, Vector2 actor, float sin, float cos, Vector3[] samples, float heightOffset)

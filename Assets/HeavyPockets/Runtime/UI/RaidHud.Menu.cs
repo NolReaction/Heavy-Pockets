@@ -6,7 +6,7 @@ namespace HeavyPockets
     internal sealed partial class RaidHud
     {
         internal Action<RaidMenuAction> MenuAction;
-        private static readonly RaidMenuAction[] PauseButtons = { RaidMenuAction.Resume, RaidMenuAction.Wardrobe,
+        private static readonly RaidMenuAction[] PauseButtons = { RaidMenuAction.Resume, RaidMenuAction.Animations,
             RaidMenuAction.Bag, RaidMenuAction.Quit, RaidMenuAction.HarborDaylight, RaidMenuAction.HarborPoster, RaidMenuAction.HarborDusk };
         private static readonly RaidMenuAction[] ReceiptButtons = { RaidMenuAction.Base };
         private static readonly RaidMenuAction[] BaseButtons = { RaidMenuAction.Join, RaidMenuAction.Quit,
@@ -68,7 +68,7 @@ namespace HeavyPockets
             {
                 case RaidMenuAction.Resume: return "Продолжить";
                 case RaidMenuAction.Bag: return "Открыть рюкзак";
-                case RaidMenuAction.Wardrobe: return "Гардероб";
+                case RaidMenuAction.Animations: return "Анимации";
                 case RaidMenuAction.Base: return "Вернуться на базу";
                 case RaidMenuAction.Join: return state.ChangingQueue ? "Входим…" : "Начать новый рейд";
                 case RaidMenuAction.CancelQueue: return state.ChangingQueue ? "Отменяем…" : "Отменить ожидание";

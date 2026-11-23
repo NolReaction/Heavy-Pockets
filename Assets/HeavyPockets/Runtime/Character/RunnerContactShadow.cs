@@ -19,8 +19,8 @@ namespace HeavyPockets
         {
             properties = new MaterialPropertyBlock();
             decal = GetComponent<Renderer>();
-            left = new Sole(rig.Bone("foot_l"), rig.Bone("ball_l"), transform.parent);
-            right = new Sole(rig.Bone("foot_r"), rig.Bone("ball_r"), transform.parent);
+            left = new Sole(rig.Bone(HumanBodyBones.LeftFoot), rig.Bone(HumanBodyBones.LeftToes), transform.parent);
+            right = new Sole(rig.Bone(HumanBodyBones.RightFoot), rig.Bone(HumanBodyBones.RightToes), transform.parent);
         }
 
         private void LateUpdate()

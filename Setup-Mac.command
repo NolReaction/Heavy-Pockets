@@ -61,10 +61,6 @@ def main():
     if not editor.is_file():
         sys.exit(f"Install Unity {version} in Unity Hub. Expected editor at {editor}")
 
-    importer = project / "Tools/Import-MixamoSprint.py"
-    if subprocess.run([sys.executable, str(importer)]).returncode:
-        print("Opening the project with its bundled sprint. Run Setup-Mac.command again to retry the Mixamo download.", flush=True)
-
     lock = project / "Temp/UnityLockfile"
     if lock.exists() and subprocess.run(["/usr/sbin/lsof", "-t", str(lock)], stdout=subprocess.DEVNULL,
                                          stderr=subprocess.DEVNULL).returncode == 0:
