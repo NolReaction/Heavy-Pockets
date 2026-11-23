@@ -403,7 +403,11 @@ namespace HeavyPockets
         internal void SetStyle(int style)
         {
             style = RunnerAppearance.Normalize(style);
-            Send(new[] { (byte)RaidCommand.SetStyle, (byte)(style & 255), (byte)(style >> 8) });
+            byte low = (byte)(style & 255);
+            byte high = (byte)((style & ~RunnerAppearance.ModelFlag) >> 8);
+            // Old servers consume the modular outfit and ignore the longer message.
+            Send(new[] { (byte)RaidCommand.SetStyle, low, high });
+            Send(new[] { (byte)RaidCommand.SetStyle, low, high, (byte)RunnerAppearance.Get(style, RunnerAppearance.ModelCategory) });
         }
         public void SetPouchLevel(byte level)
         {

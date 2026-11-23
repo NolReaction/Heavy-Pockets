@@ -8,7 +8,9 @@ namespace HeavyPockets
     {
         internal const int DefaultStyle = 0;
         internal const string ResourcePath = "Runner/Character";
-        internal static readonly string[] Categories = { "Тон кожи", "Причёска", "Лицо", "Верх", "Брюки", "Расцветка" };
+        internal const int ModelCategory = 6;
+        internal const int ModelFlag = 1 << (ModelCategory * 2);
+        internal static readonly string[] Categories = { "Тон кожи", "Причёска", "Лицо", "Верх", "Брюки", "Расцветка", "Персонаж" };
         private static readonly string[][] choices =
         {
             new[] { "Песочный", "Оливковый", "Бронзовый", "Тёмный" },
@@ -17,6 +19,7 @@ namespace HeavyPockets
             new[] { "Портовый жилет", "Кожаная куртка", "Рабочая рубашка" },
             new[] { "Плотный твил", "Карго с накладками", "Джинсы и кеды" },
             new[] { "Терракота", "Шалфей", "Шторм", "Песчаник" },
+            new[] { "Рабочий порта", "Новобранец" },
         };
         private static readonly Color32[] skinTones =
         {
@@ -39,6 +42,7 @@ namespace HeavyPockets
             new Color32(55,68,85,255), new Color32(87,79,67,255),
         };
 
+        private SkinnedMeshRenderer recruit;
         private int colorId;
         private SkinnedMeshRenderer[] pieces;
         private MaterialPropertyBlock block;
@@ -83,13 +87,19 @@ namespace HeavyPockets
                 block = new MaterialPropertyBlock();
                 colorId = Shader.PropertyToID("_Color");
             }
+            bool useRecruit = (style & ModelFlag) != 0;
+            if (useRecruit && recruit == null)
+                recruit = RecruitSkin.Attach(transform);
+            useRecruit &= recruit != null;
+            if (recruit != null)
+                recruit.gameObject.SetActive(useRecruit);
             int tone = Get(style, 0), palette = Get(style, 5);
             string hair = "Hair" + Get(style, 1), face = "Face" + Get(style, 2);
             string top = "Top" + Get(style, 3), leg = "Leg" + Get(style, 4), boot = "Boot" + Get(style, 4);
             foreach (var piece in pieces)
             {
                 string part = piece.name;
-                piece.enabled = part == hair || part == face || part == top || part == leg || part == boot;
+                piece.enabled = !useRecruit && (part == hair || part == face || part == top || part == leg || part == boot);
                 if (!piece.enabled) continue;
                 var materials = piece.sharedMaterials;
                 for (int i = 0; i < materials.Length; i++)

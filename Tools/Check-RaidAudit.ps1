@@ -165,7 +165,7 @@ function Read-Audit([string]$name) {
                         $sprint = [int]($bytes[30] -eq 1)
                         $slide = [int]($bytes[30] -eq 2)
                         $style = if ($extendedPose) { [BitConverter]::ToUInt16($bytes,31) } else { 0 }
-                        Require ($height -ge 0 -and $height -le 1 -and $bytes[30] -le 2 -and $style -le 4095 -and
+                        Require ($height -ge 0 -and $height -le 1 -and $bytes[30] -le 2 -and $style -le 8191 -and
                             (!$slide -or ($extendedPose -and $height -eq 0))) "$name invalid locomotion or appearance"
                         $worldZ = [BitConverter]::ToSingle($bytes,13)
                     }
@@ -189,7 +189,8 @@ function Read-Audit([string]$name) {
                 } elseif ($code -eq 12) {
                     Require ($bytes.Length -eq 1) "$name invalid base arrival"
                 } elseif ($code -eq 13) {
-                    Require ($bytes.Length -eq 3 -and [BitConverter]::ToUInt16($bytes,1) -le 4095) "$name invalid appearance selection"
+                    Require ($bytes.Length -in 3,4 -and [BitConverter]::ToUInt16($bytes,1) -le 4095 -and
+                        ($bytes.Length -eq 3 -or $bytes[3] -in 0,1)) "$name invalid appearance selection"
                 } elseif ($code -in 4,5,6) {
                     $length = if ($code -eq 6) { 14 } else { 9 }
                     Require ($bytes.Length -eq $length) "$name invalid transfer command length"
