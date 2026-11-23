@@ -8,6 +8,10 @@ namespace HeavyPockets
     public sealed class RaidBootstrap : MonoBehaviour
     {
         private NetworkManager network;
+#if UNITY_EDITOR_WIN && !HEAVY_POCKETS_EOS && !UNITY_SERVER && !HEAVY_POCKETS_SERVER
+        private EditorRaidSession editorSession;
+        private bool startingEditorSession;
+#endif
 #if UNITY_SERVER || UNITY_EDITOR || HEAVY_POCKETS_SERVER
         private RaidServer server;
 #endif
@@ -72,31 +76,80 @@ namespace HeavyPockets
                     return;
                 }
 #endif
-                network.NetworkConfig.ConnectionData = LocalRaidCredentials.Configure(transport, false).ClientTicket;
-                network.OnClientConnectedCallback += id => Debug.Log("HEAVY POCKETS CLIENT CONNECTED " + id);
-                if (!network.StartClient())
-                    throw new InvalidOperationException("The UDP client could not start.");
-                var client = gameObject.AddComponent<RaidClient>();
-                client.Initialize(network, auditPath);
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
-                string role = Option("-probeRole");
-                if (role != null)
+#if UNITY_EDITOR_WIN
+                if (!Application.isBatchMode && Environment.GetEnvironmentVariable("HP_RAID_CA") == null &&
+                    Environment.GetEnvironmentVariable("HP_RAID_TICKET") == null)
                 {
-                    string directory = Option("-probeDir");
-                    if ((role != "A" && role != "B") || string.IsNullOrEmpty(directory))
-                        throw new ArgumentException("Use -probeRole A|B -probeDir <directory>.");
-                    gameObject.AddComponent<RaidProbe>().Initialize(network, client.Link, role, directory);
+                    editorSession = new EditorRaidSession();
+                    startingEditorSession = true;
+                    UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += StopEditorSession;
+                    StartCoroutine(editorSession.WaitUntilReady((sessionPort, ca, ticket) =>
+                    {
+                        transport.SetConnectionData(true, "127.0.0.1", sessionPort, "127.0.0.1");
+                        StartLocalClient(LocalRaidCredentials.ConfigureClient(transport, ca, ticket), auditPath);
+                        startingEditorSession = false;
+                    }, FailStartup));
+                    return;
                 }
 #endif
+                StartLocalClient(LocalRaidCredentials.Configure(transport, false), auditPath);
 #endif
 #endif
             }
             catch (Exception exception)
             {
-                Debug.LogException(exception);
-                Application.Quit(2);
+                FailStartup(exception);
             }
         }
+
+        private static void FailStartup(Exception exception)
+        {
+            Debug.LogException(exception);
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit(2);
+#endif
+        }
+
+#if !HEAVY_POCKETS_EOS && !UNITY_SERVER && !HEAVY_POCKETS_SERVER
+        private void StartLocalClient(LocalRaidCredentials credentials, string auditPath)
+        {
+            network.NetworkConfig.ConnectionData = credentials.ClientTicket;
+            network.OnClientConnectedCallback += id => Debug.Log("HEAVY POCKETS CLIENT CONNECTED " + id);
+            if (!network.StartClient())
+                throw new InvalidOperationException("The UDP client could not start.");
+            var client = gameObject.AddComponent<RaidClient>();
+            client.Initialize(network, auditPath);
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            string role = Option("-probeRole");
+            if (role != null)
+            {
+                string directory = Option("-probeDir");
+                if ((role != "A" && role != "B") || string.IsNullOrEmpty(directory))
+                    throw new ArgumentException("Use -probeRole A|B -probeDir <directory>.");
+                gameObject.AddComponent<RaidProbe>().Initialize(network, client.Link, role, directory);
+            }
+#endif
+        }
+#endif
+
+#if UNITY_EDITOR_WIN && !HEAVY_POCKETS_EOS && !UNITY_SERVER && !HEAVY_POCKETS_SERVER
+        private void OnGUI()
+        {
+            if (startingEditorSession)
+                GUI.Box(new Rect((Screen.width - 250) / 2f, Screen.height / 2f + 50, 250, 28), "Запуск локального рейда…");
+        }
+
+        private void OnDestroy() => StopEditorSession();
+
+        private void StopEditorSession()
+        {
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= StopEditorSession;
+            editorSession?.Dispose();
+            editorSession = null;
+        }
+#endif
 
 #if !HEAVY_POCKETS_EOS && (UNITY_SERVER || UNITY_EDITOR || HEAVY_POCKETS_SERVER)
         private void Serve(UnityTransport transport, ushort port, string auditPath)

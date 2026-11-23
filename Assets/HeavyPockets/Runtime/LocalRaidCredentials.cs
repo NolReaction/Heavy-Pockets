@@ -25,26 +25,30 @@ namespace HeavyPockets
 
         internal static LocalRaidCredentials Configure(UnityTransport transport, bool isServer)
         {
-            var credentials = new LocalRaidCredentials();
-            transport.UseEncryption = true;
-            if (isServer)
-            {
+            if (!isServer)
+                return ConfigureClient(transport, Take("HP_RAID_CA"), Take("HP_RAID_TICKET"));
 #if UNITY_EDITOR || UNITY_SERVER || HEAVY_POCKETS_SERVER
-                transport.SetServerSecrets(Take("HP_RAID_CERT"), Take("HP_RAID_KEY"));
-                foreach (string encoded in Take("HP_RAID_DIGESTS").Split(','))
-                {
-                    byte[] digest = Convert.FromBase64String(encoded);
-                    if (digest.Length != 32 || credentials.remaining.Count >= 4)
-                        throw new InvalidOperationException("Invalid local raid admission configuration.");
-                    credentials.remaining.Add(digest);
-                }
-                return credentials;
-#else
-                throw new InvalidOperationException("A dedicated server build is required.");
-#endif
+            transport.UseEncryption = true;
+            transport.SetServerSecrets(Take("HP_RAID_CERT"), Take("HP_RAID_KEY"));
+            var credentials = new LocalRaidCredentials();
+            foreach (string encoded in Take("HP_RAID_DIGESTS").Split(','))
+            {
+                byte[] digest = Convert.FromBase64String(encoded);
+                if (digest.Length != 32 || credentials.remaining.Count >= 4)
+                    throw new InvalidOperationException("Invalid local raid admission configuration.");
+                credentials.remaining.Add(digest);
             }
-            transport.SetClientSecrets("heavy-pockets.local", Take("HP_RAID_CA"));
-            credentials.ClientTicket = Convert.FromBase64String(Take("HP_RAID_TICKET"));
+            return credentials;
+#else
+            throw new InvalidOperationException("A dedicated server build is required.");
+#endif
+        }
+
+        internal static LocalRaidCredentials ConfigureClient(UnityTransport transport, string ca, string ticket)
+        {
+            transport.UseEncryption = true;
+            transport.SetClientSecrets("heavy-pockets.local", ca);
+            var credentials = new LocalRaidCredentials { ClientTicket = Convert.FromBase64String(ticket) };
             if (credentials.ClientTicket.Length != 32)
                 throw new InvalidOperationException("Invalid local invitation.");
             return credentials;
