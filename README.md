@@ -18,10 +18,11 @@
 
 ### macOS
 
-Для локального рейда используйте копию проекта с удалённой строкой `com.playeveryware.eos` в `Packages/manifest.json`. В Unity Hub добавьте модуль **Mac Dedicated Server Build Support** для установленной версии редактора. Лаунчеру нужны Python 3 из Xcode Command Line Tools и системный OpenSSL.
+Для первого запуска установите в Unity Hub модуль **Mac Dedicated Server Build Support** для Unity 6000.3.26f1. Лаунчер использует Python 3 из Xcode Command Line Tools и системный OpenSSL.
 
-1. В редакторе выберите **Heavy Pockets → Build macOS dedicated server**, затем **▶ Play**. Клиент в этом режиме работает внутри Unity.
-2. Для запуска двух отдельных игровых окон также соберите **Heavy Pockets → Build macOS client** и выполните `./Play-Mac.command` из папки проекта. Приложения находятся в `Build/Development-Mac`.
+1. Из папки проекта запустите `./Setup-Mac.command`. Можно также открыть файл из Finder. Скрипт подготовит локальный манифест пакетов для рейда без EOS и откроет эту папку в Unity. Предыдущий манифест сохраняется в `UserSettings/MacPlay`. Для следующих запусков используйте ту же команду.
+2. В редакторе выберите **Heavy Pockets → Build macOS dedicated server**, откройте сцену `Assets/HeavyPockets/Depot.unity` и нажмите **▶ Play**. Клиент в этом режиме работает внутри Unity.
+3. Для запуска двух отдельных игровых окон также соберите **Heavy Pockets → Build macOS client** и выполните `./Play-Mac.command` из папки проекта. Приложения находятся в `Build/Development-Mac`.
 
 ### Windows
 
