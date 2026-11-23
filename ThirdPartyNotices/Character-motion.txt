@@ -1,0 +1,11 @@
+The full-body locomotion clips in Assets/HeavyPockets/Resources/FreightMotion
+are adapted from Universal Animation Library (Standard), by Quaternius.
+
+Source: https://quaternius.com/packs/universalanimationlibrary.html
+License: Creative Commons CC0 1.0 Universal Public Domain Dedication
+https://creativecommons.org/publicdomain/zero/1.0/
+
+The clips were retargeted to the Heavy Pockets BaseBody skeleton. Retreat
+and sidestep variants, contact height corrections and motion blending were
+created for Heavy Pockets. The character mesh and its texture are separate
+from this animation library.

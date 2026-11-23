@@ -25,6 +25,7 @@ Thumbs.db
 /Verification/*
 !/Verification/*.png
 !/Verification/acceptance.txt
+!/Verification/Movement.mp4
 # Local deployment configuration and credentials
 .env
 .env.*
