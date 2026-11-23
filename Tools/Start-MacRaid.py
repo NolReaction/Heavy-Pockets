@@ -110,6 +110,19 @@ def bundle_executable(bundle, error):
     raise RaidError(error)
 
 
+def server_executable(build):
+    if not build.exists():
+        raise RaidError("Missing local server. Build the macOS dedicated server from the Heavy Pockets menu.")
+    # Unity's dedicated player can be a console executable next to UnityPlayer.dylib
+    # even when BuildPlayer's output directory has an .app suffix.
+    player = build / "Heavy Pockets"
+    if player.is_file():
+        if not os.access(player, os.X_OK):
+            raise RaidError("Local server binary is not executable.")
+        return player
+    return bundle_executable(build, "Local server build exists but its player could not be located or executed.")
+
+
 def openssl(lifetime, *arguments):
     process = lifetime.start("/usr/bin/openssl", arguments)
     try:
@@ -216,10 +229,7 @@ def start_raid_process(lifetime, executable, options, credentials, log, marker, 
 
 def run_raid(lifetime, editor, requested_port):
     lifetime.wait()
-    server_path = bundle_executable(
-        BUILD / "Server" / "HeavyPocketsServer.app",
-        "Missing local server. Build the macOS dedicated server from the Heavy Pockets menu.",
-    )
+    server_path = server_executable(BUILD / "Server" / "HeavyPocketsServer.app")
     if not editor:
         client_path = bundle_executable(
             BUILD / "Client" / "HeavyPockets.app",

@@ -125,6 +125,11 @@ namespace HeavyPockets
         {
             // Report only known, non-sensitive launcher errors.
             string message = errors.Status == TaskStatus.RanToCompletion ? errors.Result.Trim() : "";
+#if UNITY_EDITOR_OSX
+            if (message == "Local server binary is not executable." ||
+                message == "Local server build exists but its player could not be located or executed.")
+                return message + " Check Build/Development-Mac/Server/HeavyPocketsServer.app.";
+#endif
             if (message.StartsWith("Missing local server.", StringComparison.Ordinal))
 #if UNITY_EDITOR_OSX
                 return "Build the macOS dedicated server from Heavy Pockets > Build macOS dedicated server.";
