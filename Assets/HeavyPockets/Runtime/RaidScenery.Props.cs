@@ -9,7 +9,7 @@ namespace HeavyPockets
         private GameObject runnerPrefab;
         private Material contactShadow;
 
-        private void GroundContact(Transform parent, float width, float depth)
+        private Renderer GroundContact(Transform parent, float width, float depth)
         {
             if (contactShadow == null)
                 contactShadow = new Material(Resources.Load<Shader>("GroundContact"));
@@ -19,6 +19,7 @@ namespace HeavyPockets
             var renderer = shadow.GetComponent<Renderer>();
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+            return renderer;
         }
 
         private void DisposePropMeshes()
@@ -80,9 +81,10 @@ namespace HeavyPockets
             var actor = Child(root, "Runner " + id, position);
             actor.gameObject.SetActive(false);
             actor.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
-            GroundContact(actor, .62f, .43f);
             var model = Object.Instantiate(runnerPrefab, actor, false);
             var skin = model.GetComponentInChildren<SkinnedMeshRenderer>(true);
+            Renderer shadow = GroundContact(actor, 1.7f, 1.9f);
+            shadow.gameObject.AddComponent<RunnerContactShadow>().Bind(skin);
             actor.gameObject.AddComponent<FreightRunnerGait>().Bind(skin);
             return actor;
         }

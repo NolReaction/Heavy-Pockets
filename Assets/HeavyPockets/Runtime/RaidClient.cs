@@ -13,24 +13,110 @@ namespace HeavyPockets
             public Transform Model;
             public FreightRunnerGait Gait;
             public readonly PoseTrack Track = new PoseTrack();
-            public RaidLocomotion Motion;
-            public float Yaw;
         }
 
-        // Blend between consecutive authoritative samples at their arrival cadence.
-        // A straight run remains a straight line at steady speed between packets.
+        // Render position, heading and locomotion at one point on the server timeline.
+        // The extra 25 ms absorbs packet/frame jitter without predicting through walls.
+        private struct RenderPose
+        {
+            public double Time;
+            public Vector2 Position;
+            public float Yaw;
+            public RaidLocomotion Motion;
+
+            public static RenderPose Between(RenderPose from, RenderPose to, double clock)
+            {
+                float duration = (float)(to.Time - from.Time);
+                float t = Mathf.Clamp01((float)(clock - from.Time) / duration);
+                var motion = new RaidLocomotion
+                {
+                    Crouch = Mathf.Lerp(from.Motion.Crouch, to.Motion.Crouch, t),
+                    Sprinting = t < .5f ? from.Motion.Sprinting : to.Motion.Sprinting
+                };
+                if (from.Motion.Airborne || to.Motion.Airborne)
+                    SampleJump(from.Motion, to.Motion, duration, t, ref motion);
+                return new RenderPose
+                {
+                    Time = clock, Position = Vector2.Lerp(from.Position, to.Position, t),
+                    Yaw = Mathf.LerpAngle(from.Yaw, to.Yaw, t), Motion = motion
+                };
+            }
+
+            private static void SampleJump(RaidLocomotion from, RaidLocomotion to, float duration,
+                float t, ref RaidLocomotion motion)
+            {
+                const float gravity = RaidLocomotion.Gravity;
+                if (from.Airborne && to.Airborne && from.VerticalSpeed >= to.VerticalSpeed)
+                {
+                    // The velocity change gives the elapsed physics time independently of delivery jitter.
+                    float flightTime = (from.VerticalSpeed - to.VerticalSpeed) / gravity;
+                    motion.Height = Mathf.Lerp(from.Height, to.Height, t) + .5f * gravity * flightTime * flightTime * t * (1f - t);
+                    motion.VerticalSpeed = Mathf.Lerp(from.VerticalSpeed, to.VerticalSpeed, t);
+                    return;
+                }
+
+                // Land and take off at the floor, including when a second jump starts between packets.
+                float untilLand = from.Airborne ? TimeToFloor(from.Height, from.VerticalSpeed) : 0f;
+                float sinceLift = to.Airborne ? TimeToFloor(to.Height, -to.VerticalSpeed) : 0f;
+                duration = Mathf.Max(duration, untilLand + sinceLift);
+                bool landing = t * duration < untilLand;
+                float elapsed = landing ? t * duration : (t - 1f) * duration;
+                if (!landing && -elapsed >= sinceLift) return;
+                var sample = landing ? from : to;
+                motion.Height = Mathf.Max(0f, sample.Height + (sample.VerticalSpeed - .5f * gravity * elapsed) * elapsed);
+                motion.VerticalSpeed = sample.VerticalSpeed - gravity * elapsed;
+            }
+
+            private static float TimeToFloor(float height, float velocity) =>
+                (velocity + Mathf.Sqrt(velocity * velocity + 2f * RaidLocomotion.Gravity * height)) / RaidLocomotion.Gravity;
+        }
+
         private sealed class PoseTrack
         {
-            private Vector3 from, to;
-            private float received, interval;
-            public Vector3 Sample() => Vector3.Lerp(from, to, interval > 0f ? (Time.unscaledTime - received) / interval : 1f);
+            private readonly RenderPose[] samples = new RenderPose[5];
+            private int count;
+            private double lastArrival;
+            private float cadence;
 
-            public void Push(Vector3 next, bool snap)
+            public void Push(RaidEvent update, bool snap)
             {
-                from = snap ? next : Sample();
-                to = next;
-                interval = snap ? 0f : Mathf.Clamp(Time.unscaledTime - received, .035f, .13f);
-                received = Time.unscaledTime;
+                double now = Time.unscaledTimeAsDouble;
+                float gap = (float)(now - lastArrival);
+                double stamp = now;
+                if (snap || count == 0 || gap > .4f)
+                {
+                    count = 0;
+                    cadence = .1f; // Three fixed server steps at 30 Hz.
+                }
+                else
+                {
+                    // Reveals/spawns can happen between regular snapshots.
+                    double previous = samples[count - 1].Time;
+                    if (count == 1)
+                        stamp = previous + Mathf.Clamp(gap, .001f, .15f);
+                    else
+                    {
+                        cadence = Mathf.Lerp(cadence, Mathf.Clamp(gap, 0f, .2f), .04f);
+                        double expected = previous + cadence;
+                        stamp = expected + Mathf.Clamp((float)(now - expected) * .08f, -.004f, .004f);
+                    }
+                }
+                lastArrival = now;
+                if (count == samples.Length)
+                {
+                    Array.Copy(samples, 1, samples, 0, count - 1);
+                    count--;
+                }
+                samples[count++] = new RenderPose { Time = stamp, Position = update.Position, Yaw = update.Yaw, Motion = update.Motion };
+            }
+
+            public RenderPose Sample()
+            {
+                double clock = Time.unscaledTimeAsDouble - .125;
+                if (clock <= samples[0].Time) return samples[0];
+                for (int i = 1; i < count; i++)
+                    if (clock < samples[i].Time) return RenderPose.Between(samples[i - 1], samples[i], clock);
+                return samples[count - 1];
             }
         }
 
@@ -47,6 +133,7 @@ namespace HeavyPockets
         private readonly PoseTrack ownTrack = new PoseTrack();
         internal RaidLocomotion OwnMotion { get; private set; }
         private float displayHeight, displayCrouch;
+        private float bodyYawVelocity;
         private MoveButtons probeButtons;
         private bool jumpPending;
         private Vector2 displayPosition;
@@ -176,7 +263,7 @@ namespace HeavyPockets
                         OwnPosition = e.Position;
                         OwnYaw = e.Yaw;
                         OwnMotion = e.Motion;
-                        ownTrack.Push(new Vector3(e.Position.x, e.Motion.Height, e.Position.y), !HasOwnPose);
+                        ownTrack.Push(e, !HasOwnPose);
                         if (!HasOwnPose && view != null)
                         {
                             yaw = OwnPosition.y < 0f ? 76f : -109f;
@@ -184,7 +271,7 @@ namespace HeavyPockets
                             displayPosition = OwnPosition;
                             ownModel = scenery.InstantiatePlayer(e.Actor, new Vector3(e.Position.x, 0, e.Position.y), yaw);
                             ownGait = ownModel.GetComponent<FreightRunnerGait>();
-                            UpdateCamera(1f, true);
+                            UpdateCamera(true);
                             if (captureOnSpawn && !ScriptedInput && Application.isFocused) CaptureCursor();
                         }
                         captureOnSpawn = false;
@@ -202,9 +289,7 @@ namespace HeavyPockets
                             ObserveRunnerStart(runner, target, e.Yaw);
                             runners.Add(e.Actor, runner);
                         }
-                        runner.Track.Push(target, spawned);
-                        runner.Motion = e.Motion;
-                        runner.Yaw = e.Yaw;
+                        runner.Track.Push(e, spawned);
                     }
                     break;
                 case RaidEventKind.Left:
@@ -302,6 +387,7 @@ namespace HeavyPockets
             HasOwnPose = false;
             OwnMotion = default;
             displayHeight = displayCrouch = 0f;
+            bodyYawVelocity = 0f;
             jumpPending = false;
             lastProbeDirection = Vector2.zero;
             probeButtons = MoveButtons.None;
@@ -364,14 +450,14 @@ namespace HeavyPockets
                 hud.PumpTransfers(InventoryState(), Time.unscaledTime);
             if (view == null)
                 return;
-            float blend = 1f - Mathf.Exp(-24f * Time.unscaledDeltaTime);
-            UpdateCamera(blend, false);
+            UpdateCamera(false);
             foreach (Runner runner in runners.Values)
             {
-                runner.Model.position = runner.Track.Sample();
-                runner.Model.rotation = Quaternion.Slerp(runner.Model.rotation, Quaternion.Euler(0, runner.Yaw, 0), blend);
-                runner.Gait.SetLocomotion(runner.Motion.Crouch, runner.Motion.Sprinting,
-                    runner.Motion.Airborne, runner.Motion.VerticalSpeed);
+                RenderPose pose = runner.Track.Sample();
+                runner.Model.SetPositionAndRotation(new Vector3(pose.Position.x, pose.Motion.Height, pose.Position.y),
+                    Quaternion.Euler(0f, pose.Yaw, 0f));
+                runner.Gait.SetLocomotion(pose.Motion.Crouch, pose.Motion.Sprinting,
+                    pose.Motion.Airborne, pose.Motion.VerticalSpeed);
             }
         }
 
@@ -399,29 +485,33 @@ namespace HeavyPockets
             nextSend = 0f;
             pendingProbeView = ScriptedInput;
             if (view != null && HasOwnPose)
-                UpdateCamera(0f, true);
+                UpdateCamera(true);
         }
 
-        private void UpdateCamera(float blend, bool snap)
+        private void UpdateCamera(bool snap)
         {
             // Slide the visual anchor just like the authoritative character. Straight
             // interpolation around the end of the partition could cut across its corner.
-            Vector3 sample = ownTrack.Sample();
-            Vector2 expected = new Vector2(sample.x, sample.z);
-            displayHeight = sample.y;
-            displayCrouch = snap ? OwnMotion.Crouch : Mathf.Lerp(displayCrouch, OwnMotion.Crouch, blend);
+            RenderPose pose = ownTrack.Sample();
+            Vector2 expected = pose.Position;
+            displayHeight = pose.Motion.Height;
+            displayCrouch = pose.Motion.Crouch;
             displayPosition = RaidMap.Move(displayPosition, expected - displayPosition);
-            // A sparse update can put the target around a corner from our old
-            // display position. Re-anchor to the confirmed pose in that case.
-            if ((displayPosition - expected).sqrMagnitude > 0.000001f) displayPosition = OwnPosition;
+            // After a prolonged stall recover a separated camera anchor. For ordinary
+            // cornering keep sliding along the wall until the sampled route clears it.
+            if ((displayPosition - expected).sqrMagnitude > 1f) displayPosition = OwnPosition;
             Quaternion look = Quaternion.Euler(pitch, yaw, 0);
             Vector3 camera = RaidCameraBoom.Position(displayPosition, yaw, pitch, CameraMode, viewAspect,
                 shoulderPhase, ref boomLength, Time.unscaledDeltaTime, snap,
                 displayHeight - displayCrouch * RaidLocomotion.CrouchEyeDrop);
             view.transform.SetPositionAndRotation(camera, look);
+            float heading = ScriptedInput ? pose.Yaw : yaw;
+            if (!snap)
+                heading = Mathf.SmoothDampAngle(ownModel.eulerAngles.y, heading, ref bodyYawVelocity,
+                    .055f, Mathf.Infinity, Time.unscaledDeltaTime);
             ownModel.SetPositionAndRotation(new Vector3(displayPosition.x, displayHeight, displayPosition.y),
-                Quaternion.Euler(0, ScriptedInput ? OwnYaw : yaw, 0));
-            ownGait.SetLocomotion(displayCrouch, OwnMotion.Sprinting, OwnMotion.Airborne, OwnMotion.VerticalSpeed);
+                Quaternion.Euler(0, heading, 0));
+            ownGait.SetLocomotion(displayCrouch, pose.Motion.Sprinting, pose.Motion.Airborne, pose.Motion.VerticalSpeed);
             bool showModel = IsThirdPerson && boomLength > 0.55f;
             if (ownModel.gameObject.activeSelf != showModel) ownModel.gameObject.SetActive(showModel);
         }

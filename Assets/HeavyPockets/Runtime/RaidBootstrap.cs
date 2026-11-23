@@ -82,6 +82,7 @@ namespace HeavyPockets
                 {
                     editorSession = new EditorRaidSession();
                     startingEditorSession = true;
+                    UnityEditor.Compilation.CompilationPipeline.compilationStarted += EndPlayBeforeCompile;
                     UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += StopEditorSession;
                     StartCoroutine(editorSession.WaitUntilReady((sessionPort, ca, ticket) =>
                     {
@@ -143,8 +144,12 @@ namespace HeavyPockets
 
         private void OnDestroy() => StopEditorSession();
 
+        // Stop the editor raid before a script reload invalidates its network manager and gait graphs.
+        private void EndPlayBeforeCompile(object context) => UnityEditor.EditorApplication.isPlaying = false;
+
         private void StopEditorSession()
         {
+            UnityEditor.Compilation.CompilationPipeline.compilationStarted -= EndPlayBeforeCompile;
             UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= StopEditorSession;
             editorSession?.Dispose();
             editorSession = null;

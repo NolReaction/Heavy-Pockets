@@ -19,9 +19,13 @@ namespace HeavyPockets
         private Animator animator;
         private PlayableGraph graph;
         private AnimationMixerPlayable mixer;
-        private Transform shadow;
-        private Vector3 shadowScale, lastPosition, velocity;
-        private float lastYaw, turnSpeed, phase, idleTime, crouch, liftSpeed, runBlend, airBlend, airTime, landingTime;
+        private readonly float[] gaitWeights = new float[(int)Move.Takeoff];
+        private Transform[] upperBody;
+        private Quaternion[] upperPose;
+        private Vector3 modelOrigin, lastPosition, velocity;
+        private float lastYaw, turnSpeed, phase, cadence, idleTime, crouch, liftSpeed, runBlend, airBlend, airTime, landingTime;
+        private float bodyOffset, bodyOffsetSpeed;
+        private bool hasPose;
         private bool sprinting, airborne, wasAirborne;
 
         internal void Bind(SkinnedMeshRenderer skin)
@@ -32,15 +36,25 @@ namespace HeavyPockets
             if (animator == null) animator = model.gameObject.AddComponent<Animator>();
             animator.applyRootMotion = false;
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            modelOrigin = model.localPosition;
             Transform Bone(string suffix) =>
                 Array.Find(skin.bones, bone => bone.name.EndsWith(":" + suffix, StringComparison.Ordinal));
+            upperBody = Array.FindAll(skin.bones, bone => bone.name.Contains(":Spine") || bone.name.EndsWith(":Head") ||
+                bone.name.EndsWith("Arm") || bone.name.EndsWith("Shoulder"));
+            upperPose = new Quaternion[upperBody.Length];
+            // Bake once in the bind pose. These sole points follow this model's actual mesh even when it rolls onto the toes.
+            var mesh = new Mesh();
+            skin.BakeMesh(mesh);
+            Vector3[] vertices = mesh.vertices;
+            for (int i = 0; i < vertices.Length; i++)
+                vertices[i] = transform.InverseTransformPoint(skin.transform.TransformPoint(vertices[i]));
+            if (Application.isPlaying) Destroy(mesh);
+            else DestroyImmediate(mesh);
             for (int i = 0; i < feet.Length; i++)
             {
                 string side = i == 0 ? "Left" : "Right";
-                feet[i] = new PlantedFoot(transform, Bone(side + "UpLeg"), Bone(side + "Leg"), Bone(side + "Foot"), Bone(side + "ToeBase"));
+                feet[i] = new PlantedFoot(transform, Bone(side + "UpLeg"), Bone(side + "Leg"), Bone(side + "Foot"), Bone(side + "ToeBase"), vertices);
             }
-            shadow = transform.Find("Contact shadow");
-            if (shadow != null) shadowScale = shadow.localScale;
             if (isActiveAndEnabled) ActivateRig();
         }
 
@@ -81,6 +95,12 @@ namespace HeavyPockets
             lastYaw = transform.eulerAngles.y;
             velocity = Vector3.zero;
             turnSpeed = 0f;
+            phase = cadence = bodyOffset = bodyOffsetSpeed = 0f;
+            animator.transform.localPosition = modelOrigin;
+            Array.Clear(gaitWeights, 0, gaitWeights.Length);
+            gaitWeights[(int)Move.Idle] = 1f - crouch;
+            gaitWeights[(int)Move.CrouchIdle] = crouch;
+            hasPose = false;
             runBlend = 0f;
             landingTime = 1f;
             wasAirborne = airborne;
@@ -100,7 +120,8 @@ namespace HeavyPockets
             Vector3 delta = position - lastPosition;
             delta.y = 0f;
             float yaw = transform.eulerAngles.y;
-            if (delta.sqrMagnitude > 1f || dt > .3f) { ActivateRig(); return; }
+            float longestStep = .45f + 6f * dt;
+            if (delta.sqrMagnitude > longestStep * longestStep) { ActivateRig(); return; }
             float blend = 1f - Mathf.Exp(-dt * 14f);
             velocity = Vector3.Lerp(velocity, Vector3.ClampMagnitude(delta / dt, 6f), blend);
             turnSpeed = Mathf.Lerp(turnSpeed, Mathf.Clamp(Mathf.DeltaAngle(lastYaw, yaw) / dt, -270f, 270f), blend);
@@ -113,8 +134,8 @@ namespace HeavyPockets
         {
             Array.Clear(weights, 0, weights.Length);
             float speed = motion.magnitude;
-            float pivot = Mathf.InverseLerp(30f, 160f, Mathf.Abs(turnSpeed)) * (1f - Mathf.Clamp01(speed));
-            float stepping = Mathf.Max(Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.05f, .85f, speed)), pivot * .76f);
+            float pivot = Mathf.InverseLerp(40f, 185f, Mathf.Abs(turnSpeed)) * (1f - Mathf.Clamp01(speed));
+            float stepping = Mathf.Max(SmoothRange(.035f, .92f, speed), pivot * .62f);
             Vector3 direction = speed > .04f ? motion / speed : Vector3.zero;
             direction.x += Mathf.Sign(turnSpeed) * pivot;
             float sum = Mathf.Abs(direction.x) + Mathf.Abs(direction.z);
@@ -126,10 +147,16 @@ namespace HeavyPockets
             float requestedRun = sprinting ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(2f, 4.65f, speed)) : 0f;
             runBlend = Mathf.Lerp(runBlend, requestedRun, 1f - Mathf.Exp(-dt * 13f));
             float run = runBlend;
-            float jog = Mathf.InverseLerp(1.75f, 3.8f, speed);
-            float stride = Mathf.Lerp(Mathf.Lerp(1.43f, 1.98f, jog), 2.67f, run);
-            stride = Mathf.Lerp(stride, 1.05f, crouch);
-            if (!airborne) phase = Mathf.Repeat(phase + distance / stride + dt * pivot * 1.05f, 1f);
+            float jog = SmoothRange(1.90f, 3.65f, speed);
+            // The authored side-together steps cover considerably less ground
+            // per cycle than a forward step. Use their measured stance travel.
+            float forwardStride = Mathf.Lerp(Mathf.Lerp(1.47f, 2.50f, jog), 3.12f, run);
+            float sideStride = Mathf.Lerp(.83f, .74f, Mathf.InverseLerp(-1f, 1f, direction.x));
+            float stride = forward * forwardStride + back * 1.03f + side * sideStride;
+            stride = Mathf.Lerp(stride, forward * 1.33f + back * 1.07f + side * .84f, crouch);
+            float targetCadence = Mathf.Min(distance / dt, 6f) / Mathf.Max(stride, .75f);
+            cadence = Mathf.Lerp(cadence, targetCadence + pivot * .80f, 1f - Mathf.Exp(-dt * 16f));
+            if (!airborne) phase = Mathf.Repeat(phase + cadence * dt, 1f);
             idleTime += dt;
             if (airborne && !wasAirborne) { airTime = 0f; landingTime = 1f; }
             if (!airborne && wasAirborne) landingTime = 0f;
@@ -137,93 +164,183 @@ namespace HeavyPockets
             airBlend = Mathf.MoveTowards(airBlend, airborne ? 1f : 0f, dt * (airborne ? 12f : 16f));
             airTime += dt;
             landingTime += dt;
-            float land = (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.06f,.28f,landingTime))) * .70f * (1f-airBlend);
+            float land = (1f - SmoothRange(.075f, .35f, landingTime)) * .72f * (1f-airBlend);
             float ground = 1f - land - airBlend;
-            float high = ground * (1f - crouch), low = ground * crouch;
+            float high = 1f - crouch, low = crouch;
             Set(Move.Idle, high * (1f - stepping), idleTime / clips[(int)Move.Idle].length);
             Set(Move.CrouchIdle, low * (1f - stepping), idleTime / clips[(int)Move.CrouchIdle].length);
             high *= stepping; low *= stepping;
-            Set(Move.Walk, high * forward * (1f-jog)*(1f-run), phase);
+            // The source sprint is a flying, full-extension dash. Carry some of
+            // the walking stance into it for this motor's 4.75 m/s running speed.
+            Set(Move.Walk, high * forward * ((1f-jog)*(1f-run) + .25f*run), phase);
             Set(Move.Jog, high * forward * jog*(1f-run), phase + .964f);
-            Set(Move.Sprint, high * forward * run, phase + .857f);
+            Set(Move.Sprint, high * forward * .75f * run, phase + .857f);
             Set(Move.Back, high * back, phase);
-            Set(direction.x < 0f ? Move.Left : Move.Right, high * side, phase);
+            Set(Move.Left, high * Mathf.Max(0f, -direction.x), phase);
+            Set(Move.Right, high * Mathf.Max(0f, direction.x), phase);
             Set(Move.CrouchWalk, low * forward, phase);
             Set(Move.CrouchBack, low * back, phase);
-            Set(direction.x < 0f ? Move.CrouchLeft : Move.CrouchRight, low * side, phase);
+            Set(Move.CrouchLeft, low * Mathf.Max(0f, -direction.x), phase);
+            Set(Move.CrouchRight, low * Mathf.Max(0f, direction.x), phase);
             float flight = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.28f,.52f,airTime));
-            Set(Move.Takeoff, airBlend * (1f - flight), Mathf.Lerp(.08f,.50f,Mathf.Clamp01(airTime/.36f)));
-            Set(Move.Air, airBlend * flight, Mathf.Lerp(.1f,.68f,Mathf.InverseLerp(1.5f,-5f,liftSpeed)));
-            Set(Move.Land, land, Mathf.Lerp(.03f, .54f, Mathf.Clamp01(landingTime / .28f)));
-            for (int i = 0; i < weights.Length; i++) mixer.SetInputWeight(i, weights[i]);
-            graph.Evaluate(.001f);
-            foreach (var foot in feet)
-                foot.Update(transform, !airborne && airBlend < .15f && landingTime > .09f, dt);
-            if (shadow != null)
+            // Unfold the tucked legs as the feet approach the floor. Waiting for
+            // the grounded bit would leave the feet high until the impact frame.
+            float approach = !airborne ? 1f : liftSpeed < -.1f
+                ? 1f - SmoothRange(.015f, .17f, Mathf.Max(0f, transform.position.y) / -liftSpeed) : 0f;
+            float tuck = airBlend * (1f - approach);
+            Set(Move.Takeoff, tuck * (1f - flight), Mathf.Lerp(.06f,.50f,Mathf.Clamp01(airTime/.36f)));
+            Set(Move.Air, tuck * flight, Mathf.Lerp(.1f,.68f,Mathf.InverseLerp(1.5f,-5f,liftSpeed)));
+            // The authored impact drops the hips steeply in the first tenth of
+            // the clip. Start at the touchdown pose, then ease into compression.
+            float impactTime = Mathf.Min(.40f, landingTime);
+            float compression = impactTime - .06f * (1f - Mathf.Exp(-impactTime / .06f));
+            float impactPhase = airborne ? .018f * approach : .018f + .50f * compression;
+            Set(Move.Land, land + airBlend * approach, impactPhase);
+            // Direction changes keep both anatomical feet on a shared phase. Fade the
+            // outgoing clips as they continue to play, even across a full reversal.
+            float transition = 1f - Mathf.Exp(-dt * 15f);
+            for (int i = 0; i < gaitWeights.Length; i++)
             {
-                var p = shadow.position;
-                shadow.position = new Vector3(p.x, .011f, p.z);
-                shadow.localScale = shadowScale * Mathf.Lerp(1f, .56f, Mathf.Clamp01(transform.position.y));
+                gaitWeights[i] = Mathf.Lerp(gaitWeights[i], weights[i], transition);
+                weights[i] = ground * gaitWeights[i];
             }
+            for (int i = 0; i < weights.Length; i++) mixer.SetInputWeight(i, weights[i]);
+            animator.transform.localPosition = modelOrigin;
+            graph.Evaluate(.001f);
+            float follow = 1f - Mathf.Exp(-dt * 32f);
+            for (int i = 0; i < upperBody.Length; i++)
+            {
+                Quaternion rotation = upperBody[i].localRotation;
+                upperPose[i] = hasPose ? Quaternion.Slerp(upperPose[i], rotation, follow) : rotation;
+                upperBody[i].localRotation = upperPose[i];
+            }
+            GroundFeet(dt, run, !airborne);
+            hasPose = true;
+        }
+
+        private static float SmoothRange(float from, float to, float value) =>
+            Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(from, to, value));
+
+        private void GroundFeet(float dt, float run, bool grounded)
+        {
+            float floor = transform.position.y;
+            float low = Mathf.Min(feet[0].Measure(), feet[1].Measure()) - floor;
+            // Preserve a short natural flight at a full sprint. For walking and
+            // crouching at least one foot carries the body's weight throughout.
+            float clearance = .002f + run * .027f * SmoothRange(.035f, .16f, low);
+            float desired = grounded ? Mathf.Clamp(clearance - low, -.27f, .10f) : 0f;
+            bodyOffset = hasPose
+                ? Mathf.SmoothDamp(bodyOffset, desired, ref bodyOffsetSpeed, .083f, Mathf.Infinity, dt)
+                : desired;
+            // The skeleton can lower a planted ankle only as far as the leg can reach.
+            if (grounded) bodyOffset = Mathf.Min(bodyOffset, desired + .040f);
+            animator.transform.localPosition = modelOrigin + Vector3.up * bodyOffset;
+            foreach (var foot in feet)
+                foot.Solve(transform, floor + clearance, low + floor, bodyOffset, grounded, gaitWeights[(int)Move.Sprint], crouch, dt);
         }
 
         private void Set(Move move, float weight, float normalizedTime)
         {
             int i = (int)move;
             weights[i] = weight;
-            if (weight > 0) players[i].SetTime(Mathf.Repeat(normalizedTime, 1f) * clips[i].length);
+            players[i].SetTime(Mathf.Repeat(normalizedTime, 1f) * clips[i].length);
         }
 
-        // Hold the authored support pose in world space between replicated root
-        // samples. The animated knee supplies the bend plane and the original
-        // ankle rotation preserves heel strike and toe-off.
+        // The lowest point moves from heel to ball to toe through a step. Remember
+        // the point at contact so rolling around that point preserves the animation.
         private sealed class PlantedFoot
         {
             private readonly Transform hip, knee, ankle, toe;
-            private readonly Vector3 heelSole, toeSole, forefoot;
+            private readonly Vector3[] sole = new Vector3[15];
+            private readonly Transform[] joints = new Transform[15];
             private Vector3 anchor;
-            private bool planted, useToe;
-            private float influence;
+            private bool planted;
+            private int lowestPoint, contactPoint;
+            private float height, influence;
 
-            internal PlantedFoot(Transform actor, Transform hip, Transform knee, Transform ankle, Transform toe)
+            internal PlantedFoot(Transform actor, Transform hip, Transform knee, Transform ankle, Transform toe, Vector3[] vertices)
             {
                 this.hip = hip; this.knee = knee; this.ankle = ankle; this.toe = toe;
                 Vector3 heel = actor.InverseTransformPoint(ankle.position);
                 Vector3 ball = actor.InverseTransformPoint(toe.position);
-                heel.y = ball.y = .004f;
-                heelSole = ankle.InverseTransformPoint(actor.TransformPoint(heel + Vector3.back * .044f));
-                forefoot = ankle.InverseTransformPoint(actor.TransformPoint(ball));
-                toeSole = toe.InverseTransformPoint(actor.TransformPoint(ball + Vector3.forward * .065f));
+                float[] best = new float[sole.Length];
+                for (int i = 0; i < sole.Length; i++) best[i] = float.PositiveInfinity;
+                foreach (Vector3 vertex in vertices)
+                {
+                    if (Mathf.Sign(vertex.x) != Mathf.Sign(heel.x) || vertex.y > heel.y + .025f) continue;
+                    for (int i = 0; i < sole.Length; i++)
+                    {
+                        // Lower silhouette for five pitches (heel strike through toe-off)
+                        // and three sideways rolls, including both edges of the bare foot.
+                        float score = vertex.y + (i / 3 - 2) * .68f * vertex.z + (i % 3 - 1) * .48f * vertex.x;
+                        if (score >= best[i]) continue;
+                        best[i] = score;
+                        sole[i] = vertex;
+                    }
+                }
+                for (int i = 0; i < sole.Length; i++)
+                {
+                    joints[i] = sole[i].z >= ball.z ? toe : ankle;
+                    sole[i] = joints[i].InverseTransformPoint(actor.TransformPoint(sole[i]));
+                }
             }
 
             internal void Reset() { planted = false; influence = 0f; }
 
-            internal void Update(Transform actor, bool grounded, float dt)
+            internal float Measure()
+            {
+                height = float.PositiveInfinity;
+                for (int i = 0; i < sole.Length; i++)
+                {
+                    float y = joints[i].TransformPoint(sole[i]).y;
+                    if (y >= height) continue;
+                    height = y;
+                    lowestPoint = i;
+                }
+                return height;
+            }
+
+            internal void Solve(Transform actor, float floor, float lowestSole, float offset, bool grounded, float sprint, float crouch, float dt)
             {
                 if (!grounded) { Reset(); return; }
-                Vector3 heel = ankle.TransformPoint(heelSole);
-                Vector3 tip = toe.TransformPoint(toeSole);
-                float height = Mathf.Min(Mathf.Min(heel.y, tip.y), ankle.TransformPoint(forefoot).y) - actor.position.y;
-                if (!planted && height < .018f)
+                // Bring the long source dash within this character's running stride.
+                Vector3 reach = actor.forward * (-.22f * sprint * Vector3.Dot(ankle.position - hip.position, actor.forward));
+                float support = 1f - SmoothRange(.012f, .067f, height - lowestSole);
+                if (!planted && support > .86f)
                 {
-                    useToe = tip.y < heel.y;
-                    anchor = useToe ? toe.position : ankle.position;
+                    contactPoint = lowestPoint;
+                    anchor = joints[contactPoint].TransformPoint(sole[contactPoint]) + reach;
                     planted = true;
                 }
-                Vector3 correction = anchor - (useToe ? toe.position : ankle.position);
-                correction.y = 0;
-                if (height > .055f || correction.sqrMagnitude > .030f) planted = false;
-                influence = Mathf.MoveTowards(influence, planted ? 1f : 0f, dt * 14f);
-                float lift = Mathf.Clamp(.005f - height, 0f, .08f);
-                if (influence <= 0f && lift <= 0f) return;
+                else if (support < .15f) planted = false;
+                Vector3 pivot = joints[contactPoint].TransformPoint(sole[contactPoint]) + reach;
+                if (planted && pivot.y - (height + offset) > .016f)
+                {
+                    // Transfer support from the heel to the ball without moving the
+                    // skeleton on this frame. Subsequent toe roll pivots at the ball.
+                    contactPoint = lowestPoint;
+                    Vector3 next = joints[contactPoint].TransformPoint(sole[contactPoint]) + reach;
+                    anchor += next - pivot;
+                    pivot = next;
+                }
+                influence = Mathf.Lerp(influence, planted ? support : 0f, 1f - Mathf.Exp(-dt * (planted ? 40f : 24f)));
+                Vector3 correction = Vector3.ProjectOnPlane(anchor - pivot, Vector3.up);
+                correction = Vector3.ClampMagnitude(correction, .14f + .10f * crouch + .07f * sprint);
+                anchor = pivot + correction;
+                correction = reach + correction * influence;
+                float penetration = floor - (height + offset);
+                correction.y = Mathf.Clamp(penetration * (penetration < 0f ? support : 1f), -.11f, .11f);
+                if (correction.sqrMagnitude < .0000001f) return;
+
                 Vector3 start = hip.position, joint = knee.position, end = ankle.position;
-                Vector3 target = end + Vector3.ClampMagnitude(correction, .12f) * influence + Vector3.up * lift;
+                Vector3 target = end + correction;
                 float a = Vector3.Distance(start,joint), b = Vector3.Distance(joint,end);
                 Vector3 direction = (target - start).normalized;
-                float length = Mathf.Clamp(Vector3.Distance(start,target), Mathf.Abs(a-b)+.0001f, a+b-.0001f);
+                float length = Mathf.Clamp(Vector3.Distance(start,target), Mathf.Abs(a-b)+.0001f, a+b-.001f);
                 float along = (a*a - b*b + length*length) / (2f * length);
-                Vector3 bend = Vector3.ProjectOnPlane(joint-start, direction).normalized;
-                Vector3 mid = start + direction*along + bend*Mathf.Sqrt(Mathf.Max(0f,a*a-along*along));
+                Vector3 bend = Vector3.ProjectOnPlane(joint-start, direction);
+                if (bend.sqrMagnitude < .000001f) bend = Vector3.ProjectOnPlane(actor.forward, direction);
+                Vector3 mid = start + direction*along + bend.normalized*Mathf.Sqrt(Mathf.Max(0f,a*a-along*along));
                 Quaternion rotation = ankle.rotation;
                 hip.rotation = Quaternion.FromToRotation(joint-start,mid-start) * hip.rotation;
                 knee.rotation = Quaternion.FromToRotation(ankle.position-knee.position,start+direction*length-knee.position) * knee.rotation;
