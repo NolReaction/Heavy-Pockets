@@ -21,7 +21,7 @@ namespace HeavyPockets
         {
             if (!Array.Exists(Environment.GetCommandLineArgs(), a => a == "-probeMotion")) yield break;
             // Keep the entire stride and its floor contact in view, clear of the second player.
-            yield return Walk(new Vector2(-5.65f, -2.6f), 90f);
+            yield return Walk(new Vector2(-4.95f, -2.6f), 90f);
             Phase("recording locomotion");
             string path = Path.Combine(directory, "motion");
             Directory.CreateDirectory(path);
@@ -39,11 +39,24 @@ namespace HeavyPockets
             Vector2 previous = new Vector2(9f, 9f);
             float nextInput = 0f;
             MoveButtons previousButtons = MoveButtons.None;
-            bool jumped = false;
+            bool standingJump = false, runningJump = false;
             int frame = 0;
             float start = Time.unscaledTime;
             var endOfFrame = new WaitForEndOfFrame();
             var skin = Client.ProbeLocalBody.GetComponentInChildren<SkinnedMeshRenderer>();
+            Transform Bone(string name) => Array.Find(skin.bones, b => b.name.EndsWith(":" + name, StringComparison.Ordinal));
+            var hips = Bone("Hips");
+            var chest = Bone("Spine2");
+            var leftHip = Bone("LeftUpLeg");
+            var rightHip = Bone("RightUpLeg");
+            var leftKnee = Bone("LeftLeg");
+            var rightKnee = Bone("RightLeg");
+            var leftFoot = Bone("LeftFoot");
+            var rightFoot = Bone("RightFoot");
+            var leftArm = Bone("LeftArm");
+            var rightArm = Bone("RightArm");
+            var leftHand = Bone("LeftHand");
+            var rightHand = Bone("RightHand");
             var baked = new Mesh();
             var vertices = new List<Vector3>(skin.sharedMesh.vertexCount);
             float nextSoleSample = 2.12f, maxGap = 0f;
@@ -51,21 +64,28 @@ namespace HeavyPockets
             try
             {
                 using (var times = new StreamWriter(Path.Combine(path, "frames.txt")))
+                using (var poses = new StreamWriter(Path.Combine(path, "poses.csv")))
                 {
-                    while (Time.unscaledTime - start < 8.3f)
+                    poses.WriteLine("time,look,pelvisHeading,chestHeading,ankleWidth,kneeWidth,handWidth,torsoPitch,rootHeight");
+                    while (Time.unscaledTime - start < 12.85f)
                     {
                         yield return endOfFrame;
                         float t = Time.unscaledTime - start;
-                        Vector2 direction = t < .35f ? Vector2.zero :
-                            t < 1.7f ? Vector2.right * .83f : t < 2.85f ? Vector2.right :
-                            t < 3.65f ? Vector2.zero : t < 4.7f ? Vector2.left :
-                            t < 5.55f ? new Vector2(-.45f, .55f) : t < 6.1f ? Vector2.up * .7f : Vector2.zero;
-                        MoveButtons buttons = t >= 1.7f && t < 2.85f ? MoveButtons.Sprint :
-                            t >= 3.05f && t < 5.55f ? MoveButtons.Crouch : MoveButtons.None;
-                        if (!jumped && t >= 6.75f) { buttons |= MoveButtons.Jump; jumped = true; }
+                        Vector2 direction = Vector2.zero;
+                        if (t >= .35f && t < 1.6f) direction = Vector2.right * .85f;
+                        if (t >= 1.6f && t < 2.95f) direction = Vector2.right;
+                        if (t >= 3.35f && t < 4.75f) direction = Vector2.left * .90f;
+                        if (t >= 5f && t < 5.95f) direction = Vector2.up * .8f;
+                        if (t >= 7.65f && t < 9.18f) direction = Vector2.right * .85f;
+                        MoveButtons buttons = t >= 1.6f && t < 2.95f ? MoveButtons.Sprint :
+                            t >= 4.95f && t < 5.95f ? MoveButtons.Crouch : MoveButtons.None;
+                        if (!standingJump && t >= 6.50f) { buttons |= MoveButtons.Jump; standingJump = true; }
+                        if (!runningJump && t >= 8.15f) { buttons |= MoveButtons.Jump; runningJump = true; }
+                        float heading = 90f + 18f * Ramp(9.50f, 9.84f, t) + 52f * Ramp(10.27f, 10.77f, t)
+                            - 85f * Ramp(11.45f, 12.10f, t);
                         if (buttons != previousButtons || direction != previous || t >= nextInput)
                         {
-                            Client.SetProbeMotion(direction, 90f, 3f, buttons);
+                            Client.SetProbeMotion(direction, heading, 3f, buttons);
                             previous = direction;
                             previousButtons = buttons;
                             nextInput = t + .06f;
@@ -83,9 +103,25 @@ namespace HeavyPockets
                             sprintSamples++;
                             nextSoleSample = t + .033f;
                         }
-                        Vector3 focus = Client.ProbeLocalBody.position;
+                        Transform body = Client.ProbeLocalBody;
+                        Vector3 acrossHips = rightHip.position - leftHip.position;
+                        Vector3 acrossChest = rightArm.position - leftArm.position;
+                        Vector3 torso = chest.position - hips.position;
+                        float ankleWidth = Vector3.Dot(rightFoot.position - leftFoot.position, body.right);
+                        float kneeWidth = Vector3.Dot(rightKnee.position - leftKnee.position, body.right);
+                        float handWidth = Vector3.Dot(rightHand.position - leftHand.position, body.right);
+                        float torsoPitch = Mathf.Atan2(Vector3.Dot(torso, body.forward), torso.y) * Mathf.Rad2Deg;
+                        poses.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                            "{0:F4},{1:F2},{2:F2},{3:F2},{4:F4},{5:F4},{6:F4},{7:F2},{8:F4}",
+                            t, heading, HeadingFromRight(acrossHips), HeadingFromRight(acrossChest),
+                            ankleWidth, kneeWidth, handWidth, torsoPitch, body.position.y));
+                        Vector3 focus = body.position;
                         focus.y = .96f + .72f * focus.y;
-                        sample.transform.position = focus + new Vector3(.9f, .18f, -2.95f);
+                        // Rear view shows foot lanes and turning; rotate to three-quarter profile for the backstep.
+                        Vector3 rear = new Vector3(-2.70f, .66f, -.55f);
+                        Vector3 profile = new Vector3(-.72f, .22f, -2.78f);
+                        float sideView = Ramp(2.98f, 3.34f, t) * (1f - Ramp(5.85f, 6.4f, t));
+                        sample.transform.position = focus + Vector3.Slerp(rear, profile, sideView);
                         sample.transform.LookAt(focus);
                         RenderTexture active = RenderTexture.active;
                         try
@@ -121,6 +157,11 @@ namespace HeavyPockets
             yield return Walk(new Vector2(-3.35f, -1.8f));
             yield return Walk(new Vector2(-3.35f, 2.35f));
         }
+
+        private static float Ramp(float from, float to, float t) =>
+            Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(from, to, t));
+
+        private static float HeadingFromRight(Vector3 lateral) => Mathf.Atan2(-lateral.z, lateral.x) * Mathf.Rad2Deg;
     }
 }
 #endif

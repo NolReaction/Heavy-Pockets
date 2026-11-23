@@ -752,4 +752,33 @@ foreach ($role in 'A','B') {
         @($remote | Where-Object sprint -eq 1).Count -gt 0) "$role did not see the other player's crouch, jump and sprint"
 }
 Mark 'Both players crouched, stood up, jumped, landed and sprinted. Each received the remote stance, airborne height and sprint in normal pose snapshots.'
+$poseFile = Join-Path $RunDirectory 'motion/poses.csv'
+if (Test-Path -LiteralPath $poseFile) {
+    $poses = Import-Csv -LiteralPath $poseFile
+    $run = @($poses | Where-Object { [double]$_.time -ge 2.12 -and [double]$_.time -le 2.82 })
+    $back = @($poses | Where-Object { [double]$_.time -ge 3.75 -and [double]$_.time -le 4.65 })
+    $side = @($poses | Where-Object { [double]$_.time -ge 5.25 -and [double]$_.time -le 5.85 })
+    $air = @($poses | Where-Object { [double]$_.rootHeight -gt .55 })
+    foreach ($section in @($run.Count, $back.Count, $side.Count, $air.Count)) {
+        Require ($section -ge 6) 'recorded motion sequence missed a locomotion phase'
+    }
+    $width = ($run | Measure-Object -Property ankleWidth -Average).Average
+    Require ($width -gt .10 -and $width -lt .28) 'sprint ankle spacing left the running lane'
+    Require (($back | Measure-Object -Property torsoPitch -Average).Average -gt -2) 'backpedal leaned the torso behind the hips'
+    Require (($side | Measure-Object -Property ankleWidth -Minimum).Minimum -gt .05) 'crouched sidestep crossed the ankles'
+    Require (($air | Measure-Object -Property kneeWidth -Maximum).Maximum -lt .46 -and
+        ($air | Measure-Object -Property handWidth -Maximum).Maximum -lt .8) 'jump spread the limbs beyond the compact pose'
+    # Actual clavicle/hip axes include the authored idle pose; measure the *change* over the glance.
+    $neutral = @($poses | Where-Object { [double]$_.time -ge 9.40 -and [double]$_.time -le 9.50 })
+    $glance = @($poses | Where-Object { [double]$_.time -gt 9.50 -and [double]$_.time -le 10.25 })
+    Require ($neutral.Count -gt 0 -and $glance.Count -ge 6) 'missing the glance or its reference pose'
+    $neutralTwist = ($neutral | ForEach-Object {
+        [Math]::IEEERemainder([double]$_.chestHeading - [double]$_.pelvisHeading, 360)
+    } | Measure-Object -Average).Average
+    $lead = ($glance | ForEach-Object {
+        [Math]::IEEERemainder([double]$_.chestHeading - [double]$_.pelvisHeading - $neutralTwist, 360)
+    } | Measure-Object -Maximum).Maximum
+    Require ($lead -gt 4 -and $lead -lt 22) 'small camera glance did not lead with the upper body'
+    Mark 'Rendered gait kept distinct foot lanes, an upright backstep and compact leaps; shoulders led the pelvis during the stationary camera glance.'
+}
 [IO.File]::WriteAllLines((Join-Path $RunDirectory 'acceptance.txt'), [string[]]$checks)

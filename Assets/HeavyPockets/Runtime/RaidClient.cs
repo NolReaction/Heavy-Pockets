@@ -133,7 +133,6 @@ namespace HeavyPockets
         private readonly PoseTrack ownTrack = new PoseTrack();
         internal RaidLocomotion OwnMotion { get; private set; }
         private float displayHeight, displayCrouch;
-        private float bodyYawVelocity;
         private MoveButtons probeButtons;
         private bool jumpPending;
         private Vector2 displayPosition;
@@ -387,7 +386,6 @@ namespace HeavyPockets
             HasOwnPose = false;
             OwnMotion = default;
             displayHeight = displayCrouch = 0f;
-            bodyYawVelocity = 0f;
             jumpPending = false;
             lastProbeDirection = Vector2.zero;
             probeButtons = MoveButtons.None;
@@ -454,8 +452,8 @@ namespace HeavyPockets
             foreach (Runner runner in runners.Values)
             {
                 RenderPose pose = runner.Track.Sample();
-                runner.Model.SetPositionAndRotation(new Vector3(pose.Position.x, pose.Motion.Height, pose.Position.y),
-                    Quaternion.Euler(0f, pose.Yaw, 0f));
+                runner.Model.position = new Vector3(pose.Position.x, pose.Motion.Height, pose.Position.y);
+                runner.Gait.SetLookHeading(pose.Yaw);
                 runner.Gait.SetLocomotion(pose.Motion.Crouch, pose.Motion.Sprinting,
                     pose.Motion.Airborne, pose.Motion.VerticalSpeed);
             }
@@ -505,12 +503,8 @@ namespace HeavyPockets
                 shoulderPhase, ref boomLength, Time.unscaledDeltaTime, snap,
                 displayHeight - displayCrouch * RaidLocomotion.CrouchEyeDrop);
             view.transform.SetPositionAndRotation(camera, look);
-            float heading = ScriptedInput ? pose.Yaw : yaw;
-            if (!snap)
-                heading = Mathf.SmoothDampAngle(ownModel.eulerAngles.y, heading, ref bodyYawVelocity,
-                    .055f, Mathf.Infinity, Time.unscaledDeltaTime);
-            ownModel.SetPositionAndRotation(new Vector3(displayPosition.x, displayHeight, displayPosition.y),
-                Quaternion.Euler(0, heading, 0));
+            ownModel.position = new Vector3(displayPosition.x, displayHeight, displayPosition.y);
+            ownGait.SetLookHeading(ScriptedInput ? pose.Yaw : yaw, snap);
             ownGait.SetLocomotion(displayCrouch, pose.Motion.Sprinting, pose.Motion.Airborne, pose.Motion.VerticalSpeed);
             bool showModel = IsThirdPerson && boomLength > 0.55f;
             if (ownModel.gameObject.activeSelf != showModel) ownModel.gameObject.SetActive(showModel);
