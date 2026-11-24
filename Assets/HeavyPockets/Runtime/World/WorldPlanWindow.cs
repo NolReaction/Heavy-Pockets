@@ -92,7 +92,7 @@ namespace HeavyPockets
                     try {
                         var registered = MapPalette.Register(source);
                         Reload(); chosen = Array.IndexOf(palette, registered);
-                        notice = registered.Solids.Length == 0 ? "Без коллизии. Для стен добавьте BoxCollider к префабу." : "Модель сохранена в палитре.";
+                        notice = registered.Solids.Length == 0 && registered.Glazing.Length == 0 ? "Без коллизии. Для стен добавьте BoxCollider к префабу." : "Модель сохранена в палитре.";
                     } catch (ArgumentException ex) { notice = ex.Message; }
                 }
             if (!string.IsNullOrEmpty(notice)) EditorGUILayout.HelpBox(notice, MessageType.Info);
@@ -171,6 +171,20 @@ namespace HeavyPockets
                 foreach (var part in TrainingLayout.Parts) RectOnCanvas(Area(part.Box), fixedColor);
                 foreach (var run in TrainingLayout.Paving)
                     RectOnCanvas(Area(new Bounds(new Vector3(run.Area.center.x,0,run.Area.center.y), new Vector3(run.Area.width,1,run.Area.height))), fixedColor);
+                if (Event.current.type == EventType.Repaint)
+                {
+                    GUI.BeginClip(canvas);
+                    Vector3 OnCanvas(Vector2 p) => Screen(p) - canvas.position;
+                    using (new Handles.DrawingScope(new Color(.60f,.57f,.44f)))
+                        foreach (var approach in TrainingApproach.Layout(plan))
+                        {
+                            var path = approach.Sections;
+                            for (int j=1; j<path.Length; j++)
+                                Handles.DrawAAConvexPolygon(OnCanvas(path[j-1].Left),OnCanvas(path[j-1].Right),
+                                    OnCanvas(path[j].Right),OnCanvas(path[j].Left));
+                        }
+                    GUI.EndClip();
+                }
             }
             else
                 foreach (var solid in OutdoorLayout.Occluders) RectOnCanvas(Area(solid), new Color(.32f,.39f,.39f,.5f));

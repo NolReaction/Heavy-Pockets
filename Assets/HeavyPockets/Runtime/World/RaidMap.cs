@@ -45,8 +45,15 @@ namespace HeavyPockets
         {
             layoutTraining = TrainingGround.Active;
             var plan = WorldPlan.Load(layoutTraining);
-            PlanWalls = plan ? plan.Walls() : Array.Empty<Bounds>();
-            YardOcclusion.IndexPlan(PlanWalls);
+            Bounds[] walls = Array.Empty<Bounds>(), glass = Array.Empty<Bounds>();
+            if (plan) plan.GetGeometry(out walls, out glass);
+            YardOcclusion.IndexPlan(walls, glass);
+            if (glass.Length > 0)
+            {
+                Array.Resize(ref walls, walls.Length + glass.Length);
+                glass.CopyTo(walls, walls.Length - glass.Length);
+            }
+            PlanWalls = walls;
             layoutBoxes = null;
             layoutCells = null;
             if (PlanWalls.Length == 0) return;
@@ -58,6 +65,7 @@ namespace HeavyPockets
         }
 
         private const float ContactTolerance = .0005f;
+        private const float MaxGroundStep = .10f;
         private const int CellSize = 8;
         private const int Columns = (int)(RoomX * 2f) / CellSize, Rows = (int)(RoomZ * 2f) / CellSize;
         private static readonly Bounds[][] collisionCells = BuildCollisionCells(DepotBoxes);
@@ -124,6 +132,9 @@ namespace HeavyPockets
             => Move(from, delta, capsuleTop > 0f ? capsuleTop : 2f * ContactTolerance, 0f);
 
         internal static Vector2 Move(Vector2 from, Vector2 delta, float capsuleTop, float feet)
+            => Move(from, delta, capsuleTop - feet, ref feet, false);
+
+        internal static Vector2 Move(Vector2 from, Vector2 delta, float bodyHeight, ref float feet, bool grounded)
         {
             if (delta.sqrMagnitude == 0f) return from;
             // Axis sliding with substeps keeps thin geometry solid even at a slow server tick.
@@ -132,13 +143,37 @@ namespace HeavyPockets
             for (int i = 0; i < steps; i++)
             {
                 var next = new Vector2(Mathf.Clamp(from.x + step.x, -RoomX + PlayerRadius, RoomX - PlayerRadius), from.y);
-                if (step.x != 0f && !Blocked(next, feet, capsuleTop))
+                if (next.x != from.x && CanAdvance(from, next, step, bodyHeight, ref feet, grounded))
                     from = next;
                 next = new Vector2(from.x, Mathf.Clamp(from.y + step.y, -RoomZ + PlayerRadius, RoomZ - PlayerRadius));
-                if (step.y != 0f && !Blocked(next, feet, capsuleTop))
+                if (next.y != from.y && CanAdvance(from, next, step, bodyHeight, ref feet, grounded))
                     from = next;
             }
             return from;
+        }
+
+        private static bool CanAdvance(Vector2 from, Vector2 next, Vector2 travel, float bodyHeight,
+            ref float feet, bool grounded)
+        {
+            if (!Blocked(next, feet, feet + bodyHeight)) return true;
+            if (!grounded || Mathf.Abs(FloorBelow(from, feet) - feet) > ContactTolerance) return false;
+
+            // Only step onto a top the runner is heading across. A capsule can brush
+            // the corner of a curb while the centre of its path stays beside it.
+            Vector3 heading = new Vector3(travel.x, 0f, travel.y).normalized;
+            float support = feet;
+            foreach (Bounds box in Nearby(next))
+            {
+                float top = box.max.y;
+                if (top <= support + ContactTolerance || top > feet + MaxGroundStep + ContactTolerance ||
+                    !TouchesFootprint(box, next)) continue;
+                var origin = new Vector3(next.x, box.center.y, next.y);
+                if (Intersects(box, origin, heading, PlayerRadius * 2f, out _)) support = top;
+            }
+            if (support <= feet || Blocked(from, feet, support + bodyHeight) ||
+                Blocked(next, support, support + bodyHeight)) return false;
+            feet = support;
+            return true;
         }
 
         private static bool TouchesFootprint(Bounds box, Vector2 p)

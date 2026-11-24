@@ -28,7 +28,7 @@ namespace HeavyPockets
         internal const float SampleSouth = -24.25f, SampleNorth = -20.65f;
         internal static float SampleLeft(int index) => 11f + index * SampleWidth;
         internal static readonly (Rect Area, string Material)[] Paving = {
-            (Rect.MinMaxRect(1.85f,-26.65f,44.80f,SampleSouth), "Limestone flags"),
+            (Rect.MinMaxRect(-1.3f,-27.35f,44.80f,SampleSouth), "Limestone flags"),
             (Rect.MinMaxRect(42.40f,SampleSouth,44.80f,1.55f), "Kiln brick herringbone"),
             (Rect.MinMaxRect(42.40f,1.55f,49.70f,3.95f), "Limestone flags"),
             (Rect.MinMaxRect(47.30f,3.95f,49.70f,22.45f), "Limestone flags"),

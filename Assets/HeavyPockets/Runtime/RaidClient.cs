@@ -210,6 +210,7 @@ namespace HeavyPockets
             var eye = new GameObject("Runner camera");
             eye.transform.SetParent(transform, false);
             view = eye.AddComponent<Camera>();
+            eye.AddComponent<RaidCameraSampling>();
             view.tag = "MainCamera";
             view.fieldOfView = RaidCameraBoom.VerticalFov;
             view.nearClipPlane = RaidCameraBoom.NearClip;

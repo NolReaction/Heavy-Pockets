@@ -60,9 +60,14 @@ namespace HeavyPockets
             }
             if (!found) throw new ArgumentException("У выбранной модели нет видимой геометрии.");
             var walls = new List<Bounds>();
+            var glazing = new List<Bounds>();
+            int transparent = LayerMask.NameToLayer("TransparentFX");
             foreach (var box in prefab.GetComponentsInChildren<BoxCollider>(true))
                 if (box.enabled && !box.isTrigger && Active(box.transform, prefab.transform))
-                    walls.Add(GeometryUtility.CalculateBounds(Corners(new Bounds(box.center, box.size)), origin * box.transform.localToWorldMatrix));
+                {
+                    var shapes = box.gameObject.layer == transparent ? glazing : walls;
+                    shapes.Add(GeometryUtility.CalculateBounds(Corners(new Bounds(box.center, box.size)), origin * box.transform.localToWorldMatrix));
+                }
 
             string guid = AssetDatabase.AssetPathToGUID(source);
             var kit = AssetAt<PortCellAsset>(Kits + "/" + guid + ".asset");
@@ -74,6 +79,7 @@ namespace HeavyPockets
             piece.Tile = "MapKits/" + guid;
             piece.Envelope = envelope;
             piece.Solids = walls.ToArray();
+            piece.Glazing = glazing.ToArray();
             EditorUtility.SetDirty(kit);
             EditorUtility.SetDirty(piece);
             AssetDatabase.SaveAssets();

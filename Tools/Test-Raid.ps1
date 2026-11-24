@@ -8,10 +8,14 @@ param(
     [switch]$SurfacesOnly,
     [switch]$ChartHouseOnly,
     [switch]$WarehouseOnly,
-    [switch]$MapSwitchOnly
+    [switch]$MapSwitchOnly,
+    [switch]$BistroOnly
 )
 
 $ErrorActionPreference = 'Stop'
+if ($BistroOnly -and ($HeadlessClients -or $SurfacesOnly -or $WarehouseOnly -or $ChartHouseOnly -or $MapSwitchOnly)) {
+    throw 'The bistro route uses two graphical clients in a dedicated session.'
+}
 if ($MapSwitchOnly -and ($HeadlessClients -or $WarehouseOnly -or $ChartHouseOnly -or $SurfacesOnly)) {
     throw 'The map switch route needs two graphical clients and its own session.'
 }
@@ -77,10 +81,11 @@ try {
     if ($ChartHouseOnly) { $options += '-probeChartHouse' }
     if ($WarehouseOnly) { $options += '-probeWarehouse' }
     if ($MapSwitchOnly) { $options += '-probeMapSwitch' }
+    if ($BistroOnly) { $options += '-probeBistro' }
     if ($HeadlessClients) { $options += @('-batchmode','-nographics') }
     $a = Start-Player 'A' $clientExe ($options + @('-probeRole','A'))
     Wait-For 'first client connection' { Test-Path -LiteralPath (Join-Path $run 'A.connected') } 60
-    if ($MapSwitchOnly) {
+    if ($MapSwitchOnly -or $BistroOnly) {
         Wait-For 'solo client switched map before admitting the second' { Test-Path -LiteralPath (Join-Path $run 'A.joined-training') } 60
     }
     $b = Start-Player 'B' $clientExe ($options + @('-probeRole','B'))
@@ -88,7 +93,7 @@ try {
         server = $server.Id; A = $a.Id; B = $b.Id; headlessClients = $HeadlessClients.IsPresent
         captureFrames = ($ShowClients.IsPresent -and !$HeadlessClients.IsPresent)
     } | ConvertTo-Json))
-    if (!$SurfacesOnly -and !$ChartHouseOnly -and !$WarehouseOnly -and !$MapSwitchOnly) {
+    if (!$SurfacesOnly -and !$ChartHouseOnly -and !$WarehouseOnly -and !$MapSwitchOnly -and !$BistroOnly) {
         Wait-For 'blocked open before loot generation' { Test-Path -LiteralPath (Join-Path $run 'A.wall-denied') } 45
         $generated = 'HEAVY POCKETS CRATE GENERATED after authorized open'
         if (Select-String -Quiet -LiteralPath $serverLog -SimpleMatch $generated) {
@@ -101,6 +106,15 @@ try {
     } 205
     foreach ($client in $a,$b) {
         if (-not $client.WaitForExit(15000) -or $client.ExitCode -ne 0) { throw "Client did not exit cleanly: $($client.Id)" }
+    }
+    if ($BistroOnly) {
+        foreach ($role in 'A','B') {
+            foreach ($mark in 'door-visible','glass-visible','pier-hidden','both-inside') {
+                if (!(Test-Path -LiteralPath (Join-Path $run "$role.$mark"))) { throw "Missing $role.$mark" }
+            }
+        }
+        Write-Host 'Both clients walked through the bistro doorway, saw each other through the display glass, and lost sight behind the masonry pier.'
+        return
     }
     if ($MapSwitchOnly) {
         foreach ($mark in 'A.joined-training','B.joined-training','B.offered0','B.withdrawn0','A.arrived0','B.arrived0','B.offered1','B.withdrawn1','A.arrived1','B.arrived1') {

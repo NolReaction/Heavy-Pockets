@@ -26,13 +26,19 @@ namespace HeavyPockets
         internal static string Resource(bool training) => "MapPlans/" + (training ? "Training" : "Depot");
         internal static WorldPlan Load(bool training) => Resources.Load<WorldPlan>(Resource(training));
 
-        internal Bounds[] Walls()
+        internal void GetGeometry(out Bounds[] solid, out Bounds[] glass)
         {
-            var boxes = new List<Bounds>();
+            var walls = new List<Bounds>();
+            var windows = new List<Bounds>();
             foreach (var item in Objects)
-                if (item.Piece)
-                    foreach (var solid in item.Piece.Solids) boxes.Add(item.Place(solid));
-            return boxes.ToArray();
+            {
+                if (!item.Piece) continue;
+                foreach (var box in item.Piece.Solids) walls.Add(item.Place(box));
+                if (item.Piece.Glazing != null)
+                    foreach (var pane in item.Piece.Glazing) windows.Add(item.Place(pane));
+            }
+            solid = walls.ToArray();
+            glass = windows.ToArray();
         }
     }
 }

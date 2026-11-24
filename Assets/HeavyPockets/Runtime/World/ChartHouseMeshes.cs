@@ -129,6 +129,31 @@ namespace HeavyPockets
         internal void Plane(Material m, Vector3 center, Vector3 halfRight, Vector3 halfUp, Vector3 normal, Color32? tint = null) =>
             Face(m,center-halfRight-halfUp,center+halfRight-halfUp,center+halfRight+halfUp,center-halfRight+halfUp,normal,tint);
 
+        internal void PavingFace(Material m, Vector2 a, Vector2 b, Vector2 c, Vector2 d, float elevation,
+            Matrix4x4 textureFrame)
+        {
+            var batch = For(m);
+            int i = batch.Vertices.Count;
+            void Corner(Vector2 point)
+            {
+                var world = new Vector3(point.x,elevation,point.y);
+                var tile = textureFrame.MultiplyPoint3x4(world);
+                // The authored Paris pavement tiles repeat every 2.07 metres across adjoining polygons.
+                Vertex(batch,world,Vector3.up,tile.x/2.07f,tile.z/2.07f,White);
+            }
+            void Triangle(int j,int k)
+            {
+                Vector3 p = batch.Vertices[i], q = batch.Vertices[i+j], r = batch.Vertices[i+k];
+                float cross = Vector3.Cross(q-p,r-p).y;
+                if (Mathf.Abs(cross) < .000001f) return;
+                batch.Triangles.Add(i);
+                batch.Triangles.Add(i+(cross>0 ? j : k));
+                batch.Triangles.Add(i+(cross>0 ? k : j));
+            }
+            Corner(a); Corner(b); Corner(c); Corner(d);
+            Triangle(1,2); Triangle(2,3);
+        }
+
         internal void Slab(Material m, Vector3 center, Vector3 size, float edge)
         {
             float w=size.x*.5f, h=size.y*.5f, d=size.z*.5f;

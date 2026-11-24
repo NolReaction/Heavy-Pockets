@@ -71,7 +71,7 @@ namespace HeavyPockets
                 velocity = Vector2.MoveTowards(velocity, desired, acceleration * dt);
             }
             float bodyHeight = RaidMap.StandingHeight - CrouchEyeDrop * Crouch;
-            Vector2 moved = RaidMap.Move(position, velocity * dt, Height + bodyHeight, Height);
+            Vector2 moved = RaidMap.Move(position, velocity * dt, bodyHeight, ref Height, !Airborne);
             // A blocked axis can advance a fraction of a substep on contact. Do not retain that
             // component into the next slide tick and continually press the character into the wall.
             Vector2 actual = (moved - position) / dt;

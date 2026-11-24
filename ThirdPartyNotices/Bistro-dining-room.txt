@@ -1,0 +1,23 @@
+Bistro dining room
+
+Coffee Cart 01
+Joe Seabuhr, Poly Haven. CC0 1.0 Universal.
+https://polyhaven.com/a/CoffeeCart_01
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Diffuse Transmission Teacup
+Poly Haven and Eric Chadwick, 2023. CC0 1.0 Universal.
+https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/DiffuseTransmissionTeacup
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Anisotropy Barn Lamp
+Copyright 2023 Wayfair, LLC. Model and textures by Eric Chadwick.
+Licensed under Creative Commons Attribution 4.0 International.
+https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/AnisotropyBarnLamp
+https://creativecommons.org/licenses/by/4.0/
+
+Heavy Pockets adapted these models for Unity's Standard shader, converted and
+resized the material maps, simplified the meshes at two levels of detail, added
+placement pivots, a spotlight and collision where appropriate, and composed the
+seating and coffee-service area. The table and chair prefabs used in this room
+come from the Amazon Lumberyard Bistro scene credited in Corner-Bistro.txt.

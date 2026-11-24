@@ -14,10 +14,16 @@ https://github.com/Jamsers/Bistro-Demo-Tweaked/blob/6844fe7fc07be37b768d5fbc02c0
 
 Heavy Pockets uses the Section02/S2B3 exterior architectural mesh and its associated
 material textures. The paving, four table settings, chairs, menu and topiary come
-from Ground and Section02/BistroProps in the same scene. The street-facing shell was trimmed and paired with a rotated
+from Ground and Section02/BistroProps in the same scene. The street-facing
+shell was trimmed and paired with a rotated
 instance to make a freestanding building. Original texture maps were resized and
 adapted to Unity Standard materials. The three distance meshes were simplified,
 and the far mesh samples color from the source textures at its vertices. The
 prefab adds simplified collision volumes. The menu board, folding chair and
 terrace table also have individual editor prefabs that share the same materials.
-These are modifications for the game.
+The original ground-floor door leaves were opened, the shop glazing was adapted
+for views through the facade, and the normals of broad masonry panels were
+aligned with the source facade planes. The playable dining room has a fitted
+interior floor, architectural joinery and plaster mouldings. Its oak flooring
+reuses the Poly Haven Wood Floor scan by Dimitrios Savva under CC0, as credited
+in Architectural-floors.txt. These are modifications for the game.

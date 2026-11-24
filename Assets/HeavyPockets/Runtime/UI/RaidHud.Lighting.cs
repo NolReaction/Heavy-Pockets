@@ -29,7 +29,8 @@ namespace HeavyPockets
         private static readonly Color32[] StyleSwatches = {
             new Color32(157, 199, 205, 255), new Color32(247, 165, 92, 255), new Color32(158, 158, 217, 255)
         };
-        private static int ResetRow => StyleSwatches.Length + LightSliders.Length;
+        private static int SamplingRow => StyleSwatches.Length + LightSliders.Length;
+        private static int ResetRow => SamplingRow + 1;
         private static int BackRow => ResetRow + 1;
         private int lightFocus, lightPress = -1;
         private bool lightChanged;
@@ -63,18 +64,19 @@ namespace HeavyPockets
             float width = rail - 2f * edge;
             if (row < StyleSwatches.Length)
                 return new Rect(edge, top + row * 31f, width, 27f);
-            if (row < ResetRow)
+            if (row < SamplingRow)
             {
-                float step = Mathf.Min(61f, (height - 228f) / LightSliders.Length);
+                float step = Mathf.Min(61f, (height - 265f) / LightSliders.Length);
                 return new Rect(edge, 166f + (row - StyleSwatches.Length) * step, width, step - 3f);
             }
+            if (row == SamplingRow) return new Rect(edge, height - 90f, width, 29f);
             float backWidth = 77f;
             return row == BackRow
                 ? new Rect(rail - edge - backWidth, height - 49f, backWidth, 32f)
                 : new Rect(edge, height - 49f, width - backWidth - 8f, 32f);
         }
 
-        private static bool IsLightSlider(int row) => row >= StyleSwatches.Length && row < ResetRow;
+        private static bool IsLightSlider(int row) => row >= StyleSwatches.Length && row < SamplingRow;
 
         private void SetLightValue(int row, float value)
         {
@@ -96,7 +98,8 @@ namespace HeavyPockets
             CloseLightingControls();
             if (row < StyleSwatches.Length)
                 MenuAction((RaidMenuAction)((int)RaidMenuAction.HarborDaylight + row));
-            else if (row == ResetRow) RaidScenery.ResetLightingSettings();
+            else if (row == SamplingRow) RaidCameraSampling.Cycle();
+            else if (row == ResetRow) { RaidScenery.ResetLightingSettings(); RaidCameraSampling.ResetToProfile(); }
             else if (row == BackRow) MenuAction(RaidMenuAction.BackToMenu);
         }
 
@@ -166,7 +169,7 @@ namespace HeavyPockets
                 if (selected || focus) Block(rect.x, rect.y, 3f, rect.height, accent);
                 if (style) Block(rect.x + 12, rect.center.y - 4f, 8f, 8f, accent);
                 float inset = style ? 30f : 9f;
-                string text = style ? RaidScenery.EnvironmentStyleName(i) : i == ResetRow ? "Сбросить настройки" : "Назад";
+                string text = style ? RaidScenery.EnvironmentStyleName(i) : i == SamplingRow ? RaidCameraSampling.Label : i == ResetRow ? "Сбросить настройки" : "Назад";
                 Text(rect.x + inset, rect.y, rect.width - inset * 1.5f, rect.height, text, 14,
                     selected ? accent : Paper, selected, style ? TextAnchor.MiddleLeft : TextAnchor.MiddleCenter);
             }

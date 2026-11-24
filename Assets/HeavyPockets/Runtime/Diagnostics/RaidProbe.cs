@@ -851,7 +851,8 @@ namespace HeavyPockets
             yield return new WaitUntil(() => havePose);
             Signal("connected", network.LocalClientId.ToString(CultureInfo.InvariantCulture));
             bool mapSwitch = Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeMapSwitch");
-            if (mapSwitch)
+            bool bistro = Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeBistro");
+            if (mapSwitch || bistro)
             {
                 if (role == "A")
                 {
@@ -872,9 +873,10 @@ namespace HeavyPockets
             yield return new WaitUntil(() => Exists("A.connected") && Exists("B.connected"));
             bool chartHouse = Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeChartHouse");
             bool warehouse = Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeWarehouse");
-            if (mapSwitch || warehouse || chartHouse || Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeSurfaces"))
+            if (bistro || mapSwitch || warehouse || chartHouse || Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeSurfaces"))
             {
-                if (mapSwitch) yield return CheckMapSwitch();
+                if (bistro) yield return CheckBistro();
+                else if (mapSwitch) yield return CheckMapSwitch();
                 else if (warehouse)
                 {
                     yield return CheckWarehouse();

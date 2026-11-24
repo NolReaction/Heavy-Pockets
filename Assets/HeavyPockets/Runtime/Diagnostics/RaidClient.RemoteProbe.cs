@@ -9,6 +9,7 @@ namespace HeavyPockets
     // Observe the actual visible rig during the two-client corner traversal.
     public sealed partial class RaidClient
     {
+        internal bool ProbeRemotePresent => runners.Count == 1;
         private int probeStarts, probeHides, probeImmediate;
         private float probeStartYaw, probeSpawnError, probeSpawnTurn, probeStartYawDrift;
         private bool probeActiveAfterHide;

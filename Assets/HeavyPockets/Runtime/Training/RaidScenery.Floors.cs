@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace HeavyPockets
@@ -53,16 +54,50 @@ namespace HeavyPockets
                 Vector3.right*((x1-x0)*.5f), Vector3.forward*((z1-z0)*.5f), Vector3.up);
         }
 
-        private void BuildPracticePromenade()
+        private static void PaveStrip(ChartHouseMeshes mesh, PavementSection a, PavementSection b,
+            Material centre, Material edging, float rim, float top, Matrix4x4 textureFrame)
+        {
+            float t0 = Mathf.Min(.45f,rim/Vector2.Distance(a.Left,a.Right));
+            float t1 = Mathf.Min(.45f,rim/Vector2.Distance(b.Left,b.Right));
+            Vector2 a0=a.At(t0), a1=a.At(1-t0), b0=b.At(t1), b1=b.At(1-t1);
+            mesh.PavingFace(edging,a.Left,a0,b0,b.Left,top,textureFrame);
+            mesh.PavingFace(centre,a0,a1,b1,b0,top,textureFrame);
+            mesh.PavingFace(edging,a1,a.Right,b.Right,b1,top,textureFrame);
+        }
+
+        private void BuildPracticePromenade(List<TrainingApproach> approaches)
         {
             var mesh = new ChartHouseMeshes(false);
             const float top = .014f;
+            var setts = Resources.Load<Material>(FloorMaterials + "Quayside setts");
+            var basalt = Resources.Load<Material>(FloorMaterials + "Basalt cobbles");
             // Each run ends at the next run's edge, including the apron around the corner of the chart house.
-            foreach (var run in TrainingLayout.Paving)
+            for (int i=0; i<TrainingLayout.Paving.Length; i++)
             {
+                var run = TrainingLayout.Paving[i];
                 var area = run.Area;
                 var material = Resources.Load<Material>(FloorMaterials + run.Material);
-                Top(mesh,material,area.xMin,area.yMin,area.xMax,area.yMax,top);
+                if (i != 0) { Top(mesh,material,area.xMin,area.yMin,area.xMax,area.yMax,top); continue; }
+
+                // A carriage-width threshold at spawn tapers into the sample walk without a square cut end.
+                const float radius = 1.15f;
+                PavementSection Row(float x, float recess) => new PavementSection(
+                    new Vector2(x,area.yMax-recess),new Vector2(x,area.yMin+recess));
+                var previous = Row(area.xMin,radius);
+                for (int j=1; j<=8; j++)
+                {
+                    float angle = j * Mathf.PI / 16f;
+                    var current = Row(area.xMin+radius*(1-Mathf.Cos(angle)),radius*(1-Mathf.Sin(angle)));
+                    PaveStrip(mesh,previous,current,setts,basalt,.21f,top,Matrix4x4.identity);
+                    previous=current;
+                }
+                PaveStrip(mesh,previous,Row(area.xMax,0),setts,basalt,.21f,top,Matrix4x4.identity);
+            }
+            foreach (var approach in approaches)
+                {
+                var strip = approach.Sections;
+                for (int j=1; j<strip.Length; j++)
+                    PaveStrip(mesh,strip[j-1],strip[j],basalt,setts,.26f,.011f,approach.TextureFrame);
             }
 
             // Walk-on material library. The exterior and interior finishes here are the same assets used on site.

@@ -17,7 +17,7 @@ namespace HeavyPockets
         }
 
         private static readonly Node[] nodes;
-        private static Node[] placed = Array.Empty<Node>();
+        private static Node[] placed = Array.Empty<Node>(), placedGlass = Array.Empty<Node>();
         private static readonly Bounds[] cameraGlass;
         private static readonly Bounds glazingBounds;
 
@@ -36,7 +36,11 @@ namespace HeavyPockets
             glazingBounds = envelope;
         }
 
-        internal static void IndexPlan(Bounds[] walls) => placed = Index(walls);
+        internal static void IndexPlan(Bounds[] walls, Bounds[] glass)
+        {
+            placed = Index(walls);
+            placedGlass = Index(glass);
+        }
 
         private static Node[] Index(Bounds[] source)
         {
@@ -94,6 +98,7 @@ namespace HeavyPockets
             foreach (var passage in WorldMechanisms.Active)
                 if (passage.Trace(origin, direction, length, RaidCameraBoom.Clearance, out float hit)) length = hit;
             if (placed.Length > 0) Trace(placed, 0, origin, direction, ref length, true);
+            if (placedGlass.Length > 0) Trace(placedGlass, 0, origin, direction, ref length, true);
             if (TrainingGround.Active)
             {
                 foreach (Bounds solid in TrainingLayout.Collision)
