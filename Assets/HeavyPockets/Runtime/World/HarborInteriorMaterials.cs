@@ -58,15 +58,16 @@ namespace HeavyPockets
         private static readonly Map plasterColor = new Map("PlasterColor"), plasterDetail = new Map("PlasterDetail");
         private static readonly Map woodColor = new Map("TimberColor"), woodDetail = new Map("TimberDetail");
         private static readonly Map satin = new Map("SatinDetail"), chart = new Map("NorthernHarborChart");
+        private static readonly Map logbook = new Map("RadioWatchLog");
         private static readonly Map reflection = new Map("ChartHouseReflection");
         private static readonly Map[] Maps = { brickColor, brickDetail, floorColor, floorDetail, plasterColor,
-            plasterDetail, woodColor, woodDetail, satin, chart, reflection };
+            plasterDetail, woodColor, woodDetail, satin, chart, logbook, reflection };
         private static int reservations, owners;
-        private readonly List<Material> materials = new List<Material>(13);
+        private readonly List<Material> materials = new List<Material>(14);
         private readonly Shader shader;
         private ReflectionProbe installedProbe;
         private bool disposed;
-        internal readonly Material Brick, Plaster, Floor, Timber, Paint, Steel, Brass, Ceramic, Rubber, Paper, Lamp, Chart, Glass;
+        internal readonly Material Brick, Plaster, Floor, Timber, Paint, Steel, Brass, Ceramic, Rubber, Paper, Lamp, Chart, Logbook, Glass;
 
         internal static void Prefetch()
         {
@@ -117,6 +118,8 @@ namespace HeavyPockets
                 Lamp.SetFloat("_Light", 1.35f);
                 Chart = Finish("Northern harbor pilot chart", 0xFFFFFF, chart, satin, 3.2f, .24f, 0f, .25f, .04f);
                 Chart.SetFloat("_Print", 1f);
+                Logbook = Finish("Radio watch log", 0xFFFFFF, logbook, satin, 5f, .12f, 0f, .14f, .03f);
+                Logbook.SetFloat("_Print", 1f);
                 Glass = new Material(Resources.Load<Shader>(Folder + "ChartHouseGlass")) { name = "Harbor window glass" };
                 materials.Add(Glass);
             }

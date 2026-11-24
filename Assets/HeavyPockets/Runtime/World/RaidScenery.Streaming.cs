@@ -107,6 +107,13 @@ namespace HeavyPockets
                 WallText(tile.transform, sign.Text, sign.Position, 0, sign.Size, sign.Color);
                 tile.transform.GetChild(tile.transform.childCount - 1).localRotation = sign.Rotation;
             }
+            if (asset.Props != null)
+                foreach (var prop in asset.Props)
+                {
+                    var instance = Object.Instantiate(prop.Prefab, tile.transform, false).transform;
+                    instance.SetLocalPositionAndRotation(prop.Position, prop.Rotation);
+                    instance.localScale *= prop.Scale;
+                }
             return tile;
         }
 

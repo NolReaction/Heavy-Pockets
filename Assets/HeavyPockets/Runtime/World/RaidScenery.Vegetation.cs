@@ -11,6 +11,7 @@ namespace HeavyPockets
             internal readonly List<Vector3> Vertices = new List<Vector3>();
             internal readonly List<int> Triangles = new List<int>();
             internal readonly List<Color32> Colors = new List<Color32>();
+            internal List<Vector2> CardUVs;
             internal readonly System.Random Random;
 
             internal PlantMesh(int seed) { Random = new System.Random(seed); }
@@ -20,7 +21,17 @@ namespace HeavyPockets
             {
                 Vertices.Add(point);
                 Colors.Add(tint);
+                CardUVs?.Add(Vector2.zero);
                 return Vertices.Count - 1;
+            }
+
+            internal int CardVertex(Vector3 point, Color tint, float u, float v)
+            {
+                if (CardUVs == null) CardUVs = new List<Vector2>(new Vector2[Vertices.Count]);
+                tint.a = 0f;
+                int index = Vertex(point, tint);
+                CardUVs[index] = new Vector2(u, v);
+                return index;
             }
 
             internal void Triangle(int a, int b, int c)
@@ -95,15 +106,11 @@ namespace HeavyPockets
                     if (y < 0f) continue;
                     var foot = new Vector3(x,y-.13f,z);
                     float height = placement.Range(5.2f,11.3f);
-                    bool birch = (t+i)%4 == 0;
                     var tile = bake.At(x,z);
-                    if (birch) BuildCoastalBirch(tile.Woods, foot, height);
-                    else BuildShorePine(tile.Woods, foot, height);
-                    var low = tile.Woodline;
-                    low.Stem(foot, foot + Vector3.up * height * .8f, height * .022f, Rgb(0x736650), 4);
-                    float radius = height * (birch ? .27f : .22f);
-                    low.Lobe(foot + Vector3.up * height * .62f, new Vector3(radius, height*.43f,radius),
-                        birch ? Rgb(0x445642) : Rgb(0x34493B), birch ? Rgb(0x949e64) : Rgb(0x667d59), 5);
+                    int variant = (t + i * 3) % 4;
+                    float angle = t * 2.39996f + i * .79f;
+                    BuildShelterTree(tile.Woods, foot, height, variant, angle, true);
+                    BuildShelterTree(tile.Woodline, foot, height, variant, angle, false);
                 }
                 for (int n = 0; n < 7; n++)
                 {
@@ -119,57 +126,35 @@ namespace HeavyPockets
             BakeMeadowPlants(bake);
         }
 
-        private static void BuildShorePine(PlantMesh mesh, Vector3 foot, float height)
+        private static void BuildShelterTree(PlantMesh mesh, Vector3 foot, float height,
+            int variant, float phase, bool detailed)
         {
-            Vector3 lean = new Vector3(mesh.Range(-.7f,.7f),0,mesh.Range(-.65f,.65f));
+            float radius = height * (.254f + .038f * Mathf.Sin(phase));
+            Vector3 lean = new Vector3(.045f + .018f * Mathf.Cos(phase), 0f, .022f) * height;
             Vector3 top = foot + Vector3.up * height + lean;
-            mesh.Stem(foot,top,height*.023f,Rgb(0x786654));
-            Color shade = Color.Lerp(Rgb(0x263e39), Rgb(0x405941), mesh.Range(0,1));
-            Color sunlit = Color.Lerp(Rgb(0x536e53), Rgb(0x78835b), mesh.Range(0,1));
-            float radius = height * mesh.Range(.19f,.29f);
-            float angle = mesh.Range(0,6.28f);
-            for (int tier = 0; tier < 6; tier++)
+            Color tint = Color.Lerp(Rgb(0xefecce), Rgb(0xd0ded1), .5f + .5f * Mathf.Sin(phase * 2.8f));
+            Color bottom = Color.Lerp(tint, Rgb(0x8e9f8c), .34f);
+            if (detailed) mesh.Stem(foot, Vector3.Lerp(foot,top,.41f), height * .012f, Rgb(0x766954), 5);
+            for (int side = 0; side < 3; side++)
             {
-                float t = tier/6f;
-                Vector3 whorl = Vector3.Lerp(foot, top, .26f + .70f*t);
-                int count = 8 - tier/2;
-                angle += 2.4f;
-                for (int i = 0; i < count; i++)
+                Vector3 width = Compass(phase + side * Mathf.PI / 3f) * radius;
+                Vector3 fold = detailed ? new Vector3(width.z, 0, -width.x) * .28f : Vector3.zero;
+                float u0 = (variant + (side == 1 ? 1f : 0f)) * .25f;
+                float u1 = (variant + (side == 1 ? 0f : 1f)) * .25f;
+                int a = mesh.CardVertex(foot - width + fold, bottom, u0, 0f);
+                int b = mesh.CardVertex(top - width + fold, tint, u0, 1f);
+                int c = mesh.CardVertex(top + width + fold, tint, u1, 1f);
+                int d = mesh.CardVertex(foot + width + fold, bottom, u1, 0f);
+                if (detailed)
                 {
-                    Vector3 dir = Compass(angle + (i + mesh.Range(-.16f,.16f))*2f*Mathf.PI/count);
-                    Vector3 span = new Vector3(-dir.z,0,dir.x);
-                    float reach = radius * (1f - .86f*t) * mesh.Range(.76f,1.2f);
-                    Vector3 tip = whorl + dir*reach - Vector3.up*(reach*mesh.Range(.06f,.30f));
-                    Vector3 shoulder = whorl + dir*(reach*.38f);
-                    int a = mesh.Vertex(whorl + Vector3.up*height*.11f, Color.Lerp(shade,sunlit,.59f));
-                    int left = mesh.Vertex(shoulder - span*reach*.49f, shade);
-                    int ridge = mesh.Vertex(shoulder + Vector3.up*(reach*.19f), sunlit);
-                    int point = mesh.Vertex(tip, Color.Lerp(shade,sunlit,mesh.Range(.37f,.94f)));
-                    int right = mesh.Vertex(shoulder + span*reach*.46f, shade);
-                    mesh.Triangle(a,ridge,left); mesh.Triangle(left,ridge,point);
-                    mesh.Triangle(ridge,right,point); mesh.Triangle(a,right,ridge);
+                    float mid = (u0 + u1) * .5f;
+                    int e = mesh.CardVertex(foot, bottom, mid, 0f);
+                    int f = mesh.CardVertex(top, tint, mid, 1f);
+                    mesh.Triangle(a,b,f); mesh.Triangle(a,f,e);
+                    mesh.Triangle(e,f,c); mesh.Triangle(e,c,d);
                 }
+                else { mesh.Triangle(a,b,c); mesh.Triangle(a,c,d); }
             }
-            mesh.Lobe(top - Vector3.up*height*.09f, new Vector3(radius*.17f,height*.12f,radius*.14f),shade,sunlit,6);
-        }
-
-        private static void BuildCoastalBirch(PlantMesh mesh, Vector3 foot, float height)
-        {
-            Color bark = Rgb(0xaaa18a), shade = Rgb(0x435440);
-            Color sunlit = Color.Lerp(Rgb(0x788549),Rgb(0xadb064),mesh.Range(0,1));
-            var top = foot + new Vector3(mesh.Range(-.75f,.75f),height,mesh.Range(-.75f,.75f));
-            mesh.Stem(foot,top,height*.018f,bark);
-            float angle = mesh.Range(0,6.28f);
-            for (int i = 0; i < 6; i++)
-            {
-                Vector3 split = Vector3.Lerp(foot,top, .24f + i*.073f);
-                var branch = Compass(angle + i*2.39f) * height*mesh.Range(.12f,.28f);
-                Vector3 crown = split + branch + Vector3.up*height*mesh.Range(.25f,.37f);
-                mesh.Stem(split,crown,height*.008f,bark,4);
-                float r = height*mesh.Range(.15f,.23f);
-                mesh.Lobe(crown,new Vector3(r,1.22f*r,.94f*r),shade,sunlit,8);
-            }
-            mesh.Lobe(top-Vector3.up*height*.11f, new Vector3(.16f,.17f,.17f)*height, shade,sunlit,8);
         }
 
         private static bool AllowsMeadow(float x, float z)

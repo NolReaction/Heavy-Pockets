@@ -16,6 +16,17 @@ namespace HeavyPockets
         {
             internal Transform Near, Far;
             internal PlantMesh Woods, Woodline, Sedge;
+            internal readonly List<PortCellAsset.PlacedProp> Props = new List<PortCellAsset.PlacedProp>();
+
+            internal void Place(string artPath, Vector3 position, Quaternion rotation, float scale = 1f)
+            {
+                string path = "Assets/HeavyPockets/Art/" + artPath + ".prefab";
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (!prefab) throw new FileNotFoundException("Missing harbor prop for tile bake.", path);
+                Props.Add(new PortCellAsset.PlacedProp {
+                    Prefab = prefab, Position = position, Rotation = rotation, Scale = scale
+                });
+            }
         }
 
         // All procedural high-poly meshes are authored here, before a build. The player reads native meshes.
@@ -37,6 +48,12 @@ namespace HeavyPockets
                 };
                 Tiles.Add(key,tile);
                 return tile;
+            }
+
+            internal void PlaceWarehouse(string artPath, Bounds footprint)
+            {
+                Vector3 footing = new Vector3(footprint.center.x, footprint.min.y, footprint.center.z);
+                At(footing.x, footing.z).Place(artPath, footing, Quaternion.identity);
             }
         }
 
@@ -64,7 +81,11 @@ namespace HeavyPockets
                     scenery.BuildSolidHorizon(tile.Far, solid, serial);
                     if (solid.Kind == OutdoorKind.Container) ++serial;
                 }
-                bake.At(ChartHouseLayout.Origin.x, ChartHouseLayout.Origin.z);
+                bake.PlaceWarehouse("DockWarehouse/ReceivingWarehouse", OutdoorLayout.ReceivingWarehouse.Bounds);
+                bake.PlaceWarehouse("DockWarehouse/QuayWorkshop", OutdoorLayout.QuayWorkshop.Bounds);
+                var houseTile = bake.At(ChartHouseLayout.Origin.x, ChartHouseLayout.Origin.z);
+                houseTile.Place("ChartRadio/ChartRadio", ChartHouseLayout.Origin + ChartHouseLayout.RadioPosition,
+                    ChartHouseLayout.RadioRotation, ChartHouseLayout.RadioScale);
                 scenery.BakeVegetation(bake);
                 if (!AssetDatabase.IsValidFolder(CellOutput + "PortCells"))
                     AssetDatabase.CreateFolder(CellOutput.TrimEnd('/'),"PortCells");
@@ -79,6 +100,7 @@ namespace HeavyPockets
                     string path = CellOutput + PortCellAsset.TileName(key) + ".asset";
                     var detail = ScriptableObject.CreateInstance<PortCellAsset>();
                     detail.Cell = key;
+                    detail.Props = tile.Props.ToArray();
                     AssetDatabase.CreateAsset(detail,path);
                     scenery.WriteTile(detail,tile.Near,tile.Woods,tile.Sedge,path);
                     if (key == PortCellAsset.Key(ChartHouseLayout.Origin.x, ChartHouseLayout.Origin.z))
@@ -153,6 +175,7 @@ namespace HeavyPockets
                 indexFormat=source.Vertices.Count>65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
             mesh.SetVertices(source.Vertices);
             mesh.SetColors(source.Colors);
+            if (source.CardUVs != null) mesh.SetUVs(0, source.CardUVs);
             mesh.SetTriangles(source.Triangles,0);
             mesh.RecalculateNormals();
             SaveMesh(surfaces,mesh,"Coastal vegetation and granite",casts,path);
@@ -178,6 +201,7 @@ namespace HeavyPockets
                 case OutdoorKind.FreightCrate: paint = oxide; break;
                 case OutdoorKind.Barrier: paint = concrete; break;
                 case OutdoorKind.Shed:
+                    paint=oxide;
                     Part(site,"Roof",0,size.y-.10f,0,size.x,.20f,size.z,teal);
                     size.y-=.20f; mid.y=size.y*.5f;
                     break;

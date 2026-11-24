@@ -25,9 +25,19 @@ namespace HeavyPockets
             public Color Color;
         }
 
+        [Serializable]
+        internal struct PlacedProp
+        {
+            public GameObject Prefab;
+            public Vector3 Position;
+            public Quaternion Rotation;
+            public float Scale;
+        }
+
         public Vector2Int Cell;
         public Surface[] Surfaces;
         public Lettering[] Signs;
+        public PlacedProp[] Props;
         public Mesh[] ChartHouseShell;
         public Mesh[] ChartHouseDetail;
         // Only the distant catalog fills this array. No persistent asset references the near tiles.

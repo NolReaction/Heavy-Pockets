@@ -1,0 +1,7 @@
+High-res tree textures — rubberduck, 2018
+https://opengameart.org/content/high-res-tree-textures
+CC0 1.0 Universal — https://creativecommons.org/publicdomain/zero/1.0/
+
+Four evergreen silhouettes from the author's photographic atlas were
+cropped, graded for the port and packed into ShoreConifers.png. Their
+mipmaps preserve alpha coverage at the same cutoff used in the shader.

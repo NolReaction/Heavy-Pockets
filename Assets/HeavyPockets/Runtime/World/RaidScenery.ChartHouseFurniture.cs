@@ -262,6 +262,14 @@ namespace HeavyPockets
 
         private static void ChartHouseArchive(ChartHouseMeshes b,HarborInteriorMaterials f)
         {
+            // The open watch log sits beside the receiver with its printed spread facing the operator.
+            Vector3 log = P(.99f, ChartHouseLayout.PlanChest.max.y, 3.345f);
+            Quaternion turn = Quaternion.Euler(0, -8f, 0);
+            b.Box(f.Paint, log + Vector3.up * .006f, P(.56f, .012f, .36f), turn);
+            b.Box(f.Paper, log + Vector3.up * .016f, P(.548f, .013f, .348f), turn, Bone);
+            b.Plane(f.Logbook, log + Vector3.up * .023f, turn * Vector3.right * .274f,
+                turn * Vector3.forward * .174f, Vector3.up);
+
             var bindings=new[]{Navy,OxBlood,new Color32(131,116,76,255),new Color32(100,109,91,255)};
             for(int shelf=0;shelf<4;shelf++)
             {

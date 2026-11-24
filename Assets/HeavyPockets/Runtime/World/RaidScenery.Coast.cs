@@ -14,6 +14,7 @@ namespace HeavyPockets
             earth.SetTexture("_Grain", Resources.Load<Texture2D>("DepotGrain"));
             shorePlants = new Material(earth) { name = "Coastal vegetation and granite" };
             shorePlants.SetFloat("_Habitat", 1f);
+            shorePlants.SetTexture("_Conifers", Resources.Load<Texture2D>("ShoreConifers"));
             earth.SetTexture("_CoastColor", Resources.Load<Texture2D>("CoastRockColor"));
             earth.SetTexture("_CoastNormals", Resources.Load<Texture2D>("CoastRockNormals"));
             var sea = new Material(Resources.Load<Shader>("CoastalWater")) { name = "Tidal water" };

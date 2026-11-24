@@ -1,0 +1,5 @@
+Vintage Radio Transceiver by Mateusz Sadek, Poly Haven.
+https://polyhaven.com/a/vintage_radio_transceiver
+CC0 1.0 Universal. https://polyhaven.com/license
+
+The port uses two reduced meshes from the glTF source. Both share the two UV layouts for the enclosure and accessories. The original 1K base colors and normal maps are mipmapped. The enclosure paint leans towards the green enamel of the chart house. The 512 px surface masks store metal in R, occlusion in G and smoothness in A.

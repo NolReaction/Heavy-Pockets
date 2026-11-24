@@ -14,7 +14,7 @@ namespace HeavyPockets
             const float height = 1.68f;
             const float width = height * (16f / 9f);
             // The enamel port poster hangs on the east gable of the railhead shed.
-            Bounds shed = System.Array.Find(OutdoorLayout.Solids, s => s.Kind == OutdoorKind.Shed).Bounds;
+            Bounds shed = OutdoorLayout.ReceivingWarehouse.Bounds;
             var position = new Vector3(shed.max.x + .028f, 2.12f, shed.center.z);
             Shape(root, PrimitiveType.Cube, "Enamel print backing", position,
                 new Vector3(0.054f, height + 0.082f, width + 0.082f), steel);

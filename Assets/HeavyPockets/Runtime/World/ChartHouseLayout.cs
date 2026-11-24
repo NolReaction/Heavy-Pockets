@@ -21,6 +21,13 @@ namespace HeavyPockets
         internal static readonly Bounds Roof = Span(-6.19f, WallHeight, -4.18f, 6.19f, 4.12f, 4.18f);
         internal static readonly Bounds Table = Span(-2.87f, 0, -.77f, .43f, 1.065f, .78f);
         internal static readonly Bounds PlanChest = Span(-2.55f, 0, 3.04f, 2.83f, .86f, 3.76f);
+        internal static readonly Vector3 RadioPosition = new Vector3(.25f, PlanChest.max.y, 3.37f);
+        internal static readonly Quaternion RadioRotation = Quaternion.Euler(0, 180f, 0);
+        internal const float RadioScale = 1.15f;
+        // The metal case supports the player. The flexible aerial and microphone lead do not.
+        internal static readonly Bounds RadioCase = new Bounds(
+            RadioPosition + RadioRotation * (new Vector3(-.04145f, .0697f, -.07775f) * RadioScale),
+            new Vector3(.3155f, .1364f, .2575f) * RadioScale);
         internal static readonly Bounds Bookcase = Span(-5.77f, 0, -.64f, -5.00f, 2.63f, 2.56f);
         internal static readonly Bounds Radiator = Span(5.34f, 0, -1.32f, 5.78f, .88f, 1.32f);
         internal static readonly Bounds Stool = Span(2.94f, 0, 2.25f, 3.47f, .55f, 2.78f);
@@ -48,7 +55,7 @@ namespace HeavyPockets
 
         private static Bounds[] BuildCollision()
         {
-            Bounds[] contents = { Roof, Table, PlanChest, Bookcase, Radiator, Stool, Telescope,
+            Bounds[] contents = { Roof, Table, PlanChest, RadioCase, Bookcase, Radiator, Stool, Telescope,
                 Span(1.265f,2.69f,-4.795f,3.935f,2.83f,-3.845f) };
             var boxes = new Bounds[Walls.Length + contents.Length];
             for (int i = 0; i < Walls.Length; ++i) boxes[i] = World(Walls[i]);

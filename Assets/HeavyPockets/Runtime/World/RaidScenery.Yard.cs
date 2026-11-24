@@ -299,30 +299,17 @@ namespace HeavyPockets
 
         private void BuildServiceShed(Transform site, float width, float height, float depth)
         {
-            // The clerestory and roof sit inside the common collision envelope.
-            Part(site, "Foundation", 0, .19f, 0, width, .38f, depth, concrete);
-            Part(site, "Galvanized equipment house", 0, height / 2, 0, width - .15f, height - .23f, depth - .15f, steel);
+            // The streamed masonry shell wraps this plinth and meets the fascia.
+            Part(site, "Cast concrete sill", 0, .095f, 0, width, .19f, depth, concrete);
             Part(site, "Roof fascia", 0, height - .20f, 0, width, .36f, depth, teal);
             Part(site, "Roof cap", 0, height - .04f, 0, width, .08f, depth, chalk);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                var face = Panel(site, "Metal siding", 0, 0, side * (depth / 2 - .055f), side < 0 ? 0 : 180);
-                Part(face, "Foundation stripe", 0, .69f, 0, width - .12f, .70f, .08f, teal);
-                for (float x = -width / 2 + .75f; x < width / 2 - .2f; x += 1.13f)
-                    Part(face, "Standing seam", x, height * .50f, -.015f, .038f, height - .72f, .045f, steel);
-                if (side > 0) continue;
-                float shutter = width * .30f, doorX = -width * .20f;
-                Part(face, "Loading shutter", doorX, height * .39f, -.045f, shutter, height * .78f, .035f, teal);
-                for (float y = .4f; y < height * .74f; y += .28f)
-                    Part(face, "Door slat", doorX, y, -.068f, shutter - .12f, .04f, .024f, steel);
-                for (int pane = 0; pane < 3; pane++)
-                {
-                    float x = width * .10f + pane * width * .125f, y = height * .62f;
-                    Part(face, "Window reveal", x, y, -.048f, width * .12f, height * .25f, .04f, black);
-                    Part(face, "Wire glass", x, y, -.077f, width * .12f - .15f, height * .25f - .14f, .02f, glass);
-                    Part(face, "Transom", x, y + .09f, -.092f, width * .12f, .055f, .02f, teal);
-                }
-            }
+            bool receiving = width > 10f;
+            float signX = receiving ? 0f : -width / 6f;
+            float signY = receiving ? height - .94f : height - .55f;
+            float faceZ = -depth * .5f + .035f;
+            Part(site, "Enamel loading bay sign", signX, signY, faceZ, receiving ? 3.2f : 2f, .32f, .05f, teal);
+            WallText(site, receiving ? "ПРИЁМНЫЙ СКЛАД" : "МАСТЕРСКАЯ",
+                new Vector3(signX, signY, faceZ - .029f), 0, .027f, chalk.color);
         }
 
         private static void YardBeam(Transform parent, string name, Vector3 from, Vector3 to, float width, float depth, Material material)

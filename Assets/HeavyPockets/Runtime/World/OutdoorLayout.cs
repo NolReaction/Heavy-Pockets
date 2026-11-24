@@ -20,10 +20,11 @@ namespace HeavyPockets
     // Heights are measured from the level working surface of the quay at y = 0.
     internal static class OutdoorLayout
     {
+        internal static readonly OutdoorSolid ReceivingWarehouse = new OutdoorSolid(OutdoorKind.Shed, -38, 25, 14, 5, 9);
+        internal static readonly OutdoorSolid QuayWorkshop = new OutdoorSolid(OutdoorKind.Shed, 54, -26, 8, 3.5f, 6);
         internal static readonly OutdoorSolid[] Solids =
         {
-            new OutdoorSolid(OutdoorKind.Shed, -38, 25, 14, 5, 9),
-            new OutdoorSolid(OutdoorKind.Shed, 54, -26, 8, 3.5f, 6),
+            ReceivingWarehouse, QuayWorkshop,
 
             new OutdoorSolid(OutdoorKind.Container, -19, 12, 12, 2.6f, 2.5f),
             new OutdoorSolid(OutdoorKind.Container, -19, 16, 12, 2.6f, 2.5f),

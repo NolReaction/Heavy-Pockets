@@ -3,6 +3,8 @@ Shader "HeavyPockets/CoastalGround"
     Properties
     {
         _Habitat ("Material type", Float) = 0
+        _Conifers ("Coastal conifer cutouts", 2D) = "white" {}
+        _Cutoff ("Canopy coverage", Range(0,1)) = .32
         _Grain ("Surface detail", 2D) = "gray" {}
         _CoastColor ("Rock, gravel and moss", 2D) = "gray" {}
         _CoastNormals ("Ground relief", 2D) = "bump" {}
@@ -13,20 +15,23 @@ Shader "HeavyPockets/CoastalGround"
         Cull Off
         CGPROGRAM
         #pragma target 3.0
-        #pragma surface surf HarborDiffuse fullforwardshadows addshadow vertex:vert
+        #pragma surface surf HarborDiffuse fullforwardshadows addshadow alphatest:_Cutoff vertex:vert
         #include "HarborSurfaceLighting.cginc"
-        sampler2D _Grain, _CoastColor, _CoastNormals;
+        sampler2D _Grain, _CoastColor, _CoastNormals, _Conifers;
         half _Habitat, _HarborPoster, _HarborDusk;
         half4 _HarborLandColor, _HarborGrassColor;
         struct Input
         {
             float3 worldPos;
             half slope;
+            float2 cardUV;
             fixed4 color : COLOR;
         };
         void vert(inout appdata_full v, out Input data)
         {
             UNITY_INITIALIZE_OUTPUT(Input, data);
+            data.cardUV = v.texcoord.xy;
+            if (_Habitat > .5 && v.color.a < .125) v.normal = float3(0,1,0);
             float3 n = normalize(v.normal);
             float3 axis = abs(n.x) < .96 ? float3(1,0,0) : float3(0,0,1);
             v.tangent = float4(normalize(axis - n * dot(axis,n)), -1);
@@ -40,6 +45,7 @@ Shader "HeavyPockets/CoastalGround"
             half tone = i.color.r;
             half pattern = broad;
             half3 color;
+            o.Alpha = 1;
             if (_Habitat < .5)
             {
                 half grain = tex2D(_Grain, uv * .39).r;
@@ -62,6 +68,12 @@ Shader "HeavyPockets/CoastalGround"
             else
             {
                 color = i.color.rgb;
+                if (i.color.a < .125)
+                {
+                    fixed4 tree = tex2D(_Conifers, i.cardUV);
+                    color *= tree.rgb;
+                    o.Alpha = tree.a;
+                }
                 // The foliage palette follows the same pigment shift as the meadow.
                 color = lerp(color, color * half3(.75,1.02,1.12), _HarborDusk * .65);
                 color = lerp(color, color * half3(.86,1.08,.88), _HarborPoster * .6);
@@ -69,7 +81,6 @@ Shader "HeavyPockets/CoastalGround"
             }
             half band = floor(pattern * 5 + .5) / 5;
             o.Albedo = color * lerp(1, .84 + band * .3, _HarborPoster);
-            o.Alpha = 1;
         }
         ENDCG
     }

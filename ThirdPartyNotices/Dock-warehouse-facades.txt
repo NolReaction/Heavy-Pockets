@@ -1,0 +1,11 @@
+Modular Factory Facade
+Artist: James Ray Cock, Poly Haven
+Asset: https://polyhaven.com/a/modular_factory_facade
+License: CC0 1.0 Universal, https://creativecommons.org/publicdomain/zero/1.0/
+
+ReceivingWarehouse and QuayWorkshop use selected wall, window, personnel
+door and rolling-shutter modules from the source model. The two shells were
+laid out to fit the port's existing building footprints. Flat subdivisions
+were dissolved, surfaces were combined, and the original base color, normal,
+metallic and roughness textures were repacked into shared 2K atlases.
+Opaque glass and paint colors were adjusted to match the port.
