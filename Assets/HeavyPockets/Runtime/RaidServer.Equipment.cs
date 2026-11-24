@@ -41,7 +41,7 @@ namespace HeavyPockets
             var to = (GearLocation)bytes[10];
             bool crate = from == GearLocation.Crate || to == GearLocation.Crate;
             if (bytes[13] > 1 || (bytes[11] == 255) != (bytes[12] == 255) ||
-                (crate && (!player.Viewing || !loot.CrateGenerated || !RaidMap.CanOpen(player.Position))))
+                (crate && (!player.Viewing || !loot.CrateGenerated || !RaidMap.CanOpen(player.Position, player.Motion))))
             {
                 Status(player, RaidStatus.Denied, operation);
                 return;
@@ -54,7 +54,7 @@ namespace HeavyPockets
             if (from == GearLocation.Bag || to == GearLocation.Bag) SendInventory(player, RaidEventKind.Bag);
             if (crate)
                 foreach (Player viewer in players.Values)
-                    if (viewer.Viewing && !viewer.Exited && RaidMap.CanOpen(viewer.Position))
+                    if (viewer.Viewing && !viewer.Exited && RaidMap.CanOpen(viewer.Position, viewer.Motion))
                         SendInventory(viewer, RaidEventKind.Crate);
             // Last snapshot in the ordered transaction; lets the client retire its drag preview.
             SendGear(player);

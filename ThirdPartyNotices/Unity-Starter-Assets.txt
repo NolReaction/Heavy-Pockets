@@ -8,8 +8,10 @@ Licensed under the Unity Companion License for Unity-dependent projects.
 https://unity.com/legal/licenses/unity-companion-license
 
 The Armature model and animation FBXs are intact. The included controller
-omits disconnected Fly objects. The original colour, normal, metallic
-and emissive maps are assigned to Built-in Standard materials for this project.
+omits disconnected Fly objects. For the Built-in Standard materials, each
+Armature AlbedoTransparency map is combined with its original Unity ColorMask
+to preserve the paintable armor panels. The normal, metallic and emissive
+maps are used as supplied.
 
 This package is licensed under the Unity Companion License.
 For full license terms, please see: https://unity3d.com/legal/licenses/Unity_Companion_License

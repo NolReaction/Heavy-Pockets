@@ -21,6 +21,7 @@ namespace HeavyPockets
         {
             var root = new GameObject("Heavy Pockets session");
             DontDestroyOnLoad(root);
+            PortCollisionWorld.Create(root.transform);
             root.AddComponent<RaidBootstrap>().Begin();
         }
 
@@ -51,9 +52,9 @@ namespace HeavyPockets
                     TickRate = 30,
                     ConnectionApproval = true,
 #if HEAVY_POCKETS_EOS
-                    ProtocolVersion = 24
+                    ProtocolVersion = 26
 #else
-                    ProtocolVersion = 23
+                    ProtocolVersion = 25
 #endif
                 };
 #if HEAVY_POCKETS_EOS
@@ -169,7 +170,11 @@ namespace HeavyPockets
             };
             if (!network.StartServer())
                 throw new InvalidOperationException("Cannot listen on 127.0.0.1:" + port);
-            server = new RaidServer(network, auditPath);
+            bool pairedSpawn = false;
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            pairedSpawn = Array.IndexOf(Environment.GetCommandLineArgs(), "-twoPlayerTest") >= 0;
+#endif
+            server = new RaidServer(network, auditPath, pairedSpawn: pairedSpawn);
             Debug.Log("HEAVY POCKETS SERVER READY 127.0.0.1:" + port);
         }
 

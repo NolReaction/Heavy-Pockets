@@ -50,18 +50,20 @@ namespace HeavyPockets
         private readonly NetworkManager net;
         private readonly RaidAudit audit;
         private readonly Func<ulong, bool> mayPlay;
+        private readonly bool pairedSpawn;
         private readonly Dictionary<ulong, Player> players = new Dictionary<ulong, Player>();
         private RaidLoot loot = new RaidLoot();
         private uint round = 1;
         private int nextSlot;
         private float untilSnapshot;
 
-        public RaidServer(NetworkManager net, string auditPath = null, Func<ulong, bool> mayPlay = null)
+        public RaidServer(NetworkManager net, string auditPath = null, Func<ulong, bool> mayPlay = null, bool pairedSpawn = false)
         {
             if (!net.IsServer || net.IsClient)
                 throw new InvalidOperationException("RaidServer requires a running dedicated server");
             this.net = net;
             this.mayPlay = mayPlay;
+            this.pairedSpawn = pairedSpawn;
             audit = RaidAudit.Open(auditPath);
             net.CustomMessagingManager.RegisterNamedMessageHandler(RaidWire.Commands, OnCommand);
             net.OnClientConnectedCallback += ActivatePlayer;
@@ -100,7 +102,15 @@ namespace HeavyPockets
             if (!net.ConnectedClients.ContainsKey(id) || (mayPlay != null && !mayPlay(id))) return;
             // All per-raid input, visibility, search and extraction state start fresh.
             // Rate limits and the transfer sequence belong to the transport connection.
-            var player = new Player { Id = id, Round = round, Position = RaidMap.Spawn(nextSlot++) };
+            int slot = nextSlot++;
+            bool first = slot % 2 == 0;
+            var player = new Player { Id = id, Round = round, Position = RaidMap.Spawn(slot), Yaw = first ? 51f : -109f };
+            if (pairedSpawn)
+            {
+                // Look across the open lane south of the three practice crates.
+                player.Position = new Vector2(first ? -4f : -14.2f, -8.6f);
+                player.Yaw = first ? -76f : 76f;
+            }
             if (previous != null)
             {
                 player.IngressCredits = previous.IngressCredits;
@@ -251,9 +261,9 @@ namespace HeavyPockets
             switch (command)
             {
                 case RaidCommand.Open:
-                    if (!RaidMap.CanOpen(player.Position))
+                    if (!RaidMap.CanOpen(player.Position, player.Motion))
                     {
-                        bool closeEnough = (player.Position - RaidMap.Crate).sqrMagnitude <= RaidMap.Reach * RaidMap.Reach;
+                        bool closeEnough = RaidMap.WithinReach(player.Position, player.Motion.Height);
                         Status(player, closeEnough ? RaidStatus.Blocked : RaidStatus.OutOfRange);
                         return;
                     }
@@ -348,7 +358,7 @@ namespace HeavyPockets
             if ((flags & 0xF0) != 0) { Status(player, RaidStatus.Denied, sequence); return; }
             bool fromBag = exact ? (flags & 1) != 0 : command == RaidCommand.Store;
             bool toBag = exact ? (flags & 2) != 0 : command == RaidCommand.Take;
-            if ((!fromBag || !toBag) && (!player.Viewing || !RaidMap.CanOpen(player.Position)))
+            if ((!fromBag || !toBag) && (!player.Viewing || !RaidMap.CanOpen(player.Position, player.Motion)))
             {
                 bool lostCrate = player.Viewing;
                 player.Viewing = false;
@@ -365,7 +375,7 @@ namespace HeavyPockets
             if (fromBag || toBag) SendInventory(player, RaidEventKind.Bag);
             if (fromBag && toBag) return;
             foreach (Player viewer in players.Values)
-                if (viewer.Viewing && !viewer.Exited && RaidMap.CanOpen(viewer.Position))
+                if (viewer.Viewing && !viewer.Exited && RaidMap.CanOpen(viewer.Position, viewer.Motion))
                     SendInventory(viewer, RaidEventKind.Crate);
         }
 
@@ -398,7 +408,7 @@ namespace HeavyPockets
                 player.IdleSeconds = (player.Position - before).sqrMagnitude > 0.00000001f ? 0f :
                     Mathf.Min(1f, player.IdleSeconds + deltaSeconds);
                 UpdateCamera(player, deltaSeconds);
-                if (player.Viewing && !RaidMap.CanOpen(player.Position))
+                if (player.Viewing && !RaidMap.CanOpen(player.Position, player.Motion))
                 {
                     player.Viewing = false;
                     Status(player, RaidStatus.CrateLost);

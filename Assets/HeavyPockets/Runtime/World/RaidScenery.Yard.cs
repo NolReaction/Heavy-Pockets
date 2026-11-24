@@ -28,6 +28,9 @@ namespace HeavyPockets
                     case OutdoorKind.Barrier:
                         BuildConcreteBarrier(site, width, size.y, depth);
                         break;
+                    case OutdoorKind.FreightCrate:
+                        BuildFreightCrate(site, width, size.y, depth);
+                        break;
                     case OutdoorKind.Pier:
                         Part(site, "Portal crane leg", 0, size.y / 2, 0, width - .22f, size.y, depth - .22f, amber);
                         Part(site, "Crane wheel box", 0, .56f, 0, width, 1.12f, depth, black);
@@ -178,6 +181,21 @@ namespace HeavyPockets
                     YardBeam(site, "Binding strap", new Vector3(side * 1.12f,1.68f,z), new Vector3(side * .21f,size.y,z), .073f, .080f, black);
                 }
                 Part(site, "Binding strap", 0, size.y, z, .46f, .045f, .08f, black);
+            }
+        }
+
+        private void BuildFreightCrate(Transform site, float width, float height, float depth)
+        {
+            const float lid = .075f;
+            Part(site, "Packing case", 0, height / 2, 0, width - .05f, height - .08f, depth - .05f, oxide);
+            Part(site, "Lower skid", 0, .045f, 0, width, .09f, depth - .012f, black);
+            Part(site, "Lid", 0, height - lid / 2 - .004f, 0, width, lid, depth - .012f, teal);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                float x = side * width * .31f;
+                Part(site, "Packing strap", x, height / 2, 0, .065f, height, depth, steel);
+                Part(site, "Handling mark", -width * .20f, height * .54f, side * (depth / 2 - .019f),
+                    .23f, .095f, .015f, chalk);
             }
         }
 

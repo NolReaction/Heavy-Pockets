@@ -34,6 +34,7 @@ namespace HeavyPockets
         {
             var model = Child(root, "Transit case", new Vector3(RaidMap.Crate.x, 0, RaidMap.Crate.y));
             GroundContact(model, 1.65f, 1.15f);
+            if (TryBuildCustomChest(model)) return;
             var p = new PropGeometry();
             p.Box(black, 0, .082f, 0, .99f, .12f, .63f, .035f);
             p.Box(amber, 0, .407f, 0, 1.034f, .62f, .658f, .036f);
@@ -72,6 +73,48 @@ namespace HeavyPockets
             for (int i = 0; i < 2; i++)
                 p.Box(amber, -.236f + i * .078f, .834f, -.011f, .036f, .033f, .406f, .012f);
             p.Apply(model, propMeshes);
+        }
+
+        private static bool TryBuildCustomChest(Transform anchor)
+        {
+            var prefab = Resources.Load<GameObject>("CargoChest");
+            if (prefab == null) return false;
+
+            // Measure at the origin so off-centre pivots, nested parts and imported
+            // FBX scale all fit the same lid height and footprint used by the server.
+            var fit = new GameObject("Chest visual").transform;
+            var instance = Object.Instantiate(prefab, fit, false);
+            instance.SetActive(true);
+            Bounds bounds = default;
+            bool hasMesh = false;
+            foreach (MeshRenderer renderer in instance.GetComponentsInChildren<MeshRenderer>())
+            {
+                if (!renderer.enabled || !renderer.TryGetComponent(out MeshFilter filter) || filter.sharedMesh == null)
+                    continue;
+                if (hasMesh) bounds.Encapsulate(renderer.bounds);
+                else { bounds = renderer.bounds; hasMesh = true; }
+            }
+            Vector3 size = bounds.size;
+            if (!hasMesh || Mathf.Min(size.x, size.y, size.z) < .0001f)
+            {
+                Debug.LogWarning("CargoChest needs a visible 3D mesh. Using the transit case.");
+                fit.gameObject.SetActive(false);
+                Object.Destroy(fit.gameObject);
+                return false;
+            }
+
+            foreach (Collider collider in instance.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
+            foreach (Rigidbody body in instance.GetComponentsInChildren<Rigidbody>(true))
+            {
+                body.isKinematic = true;
+                body.detectCollisions = false;
+            }
+            Vector3 target = RaidMap.CargoCase.size;
+            Vector3 scale = new Vector3(target.x / size.x, target.y / size.y, target.z / size.z);
+            fit.SetParent(anchor, false);
+            fit.localScale = scale;
+            fit.localPosition = -Vector3.Scale(scale, new Vector3(bounds.center.x, bounds.min.y, bounds.center.z));
+            return true;
         }
 
         internal Transform InstantiatePlayer(ulong id, Vector3 position, float yaw)

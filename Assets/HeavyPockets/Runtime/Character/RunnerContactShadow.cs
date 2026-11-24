@@ -26,14 +26,15 @@ namespace HeavyPockets
         private void LateUpdate()
         {
             Vector3 position = transform.parent.position;
-            float flight = Mathf.Clamp01(position.y);
-            transform.position = new Vector3(position.x, .011f, position.z);
+            float support = RaidMap.FloorBelow(new Vector2(position.x, position.z), position.y);
+            float flight = Mathf.Clamp01(position.y - support);
+            transform.position = new Vector3(position.x, support + .011f, position.z);
             // The broad body shadow softens during flight. The two narrower shadows
             // fade independently as the heel rolls up and the toe leaves the floor.
             properties.SetVector(Body, new Vector4(2.6f - flight * .4f, 3.2f - flight * .5f,
                 Mathf.Lerp(.21f, .07f, flight), 0f));
-            left.Write(properties, LeftHeel, LeftToe);
-            right.Write(properties, RightHeel, RightToe);
+            left.Write(properties, LeftHeel, LeftToe, support);
+            right.Write(properties, RightHeel, RightToe, support);
             decal.SetPropertyBlock(properties);
         }
 
@@ -54,15 +55,15 @@ namespace HeavyPockets
                 toeLocal = toe.InverseTransformPoint(tip);
             }
 
-            internal void Write(MaterialPropertyBlock block, int heelId, int toeId)
+            internal void Write(MaterialPropertyBlock block, int heelId, int toeId, float support)
             {
-                block.SetVector(heelId, Project(ankle.TransformPoint(heelLocal)));
-                block.SetVector(toeId, Project(toe.TransformPoint(toeLocal)));
+                block.SetVector(heelId, Project(ankle.TransformPoint(heelLocal), support));
+                block.SetVector(toeId, Project(toe.TransformPoint(toeLocal), support));
             }
 
-            private static Vector4 Project(Vector3 point)
+            private static Vector4 Project(Vector3 point, float support)
             {
-                float lift = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.012f, .24f, point.y));
+                float lift = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.012f, .24f, point.y - support));
                 return new Vector4(point.x, point.z, Mathf.Lerp(.082f, .14f, lift), .46f * (1f - lift));
             }
         }

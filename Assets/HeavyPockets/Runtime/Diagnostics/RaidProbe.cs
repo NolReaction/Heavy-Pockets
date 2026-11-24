@@ -26,6 +26,7 @@ namespace HeavyPockets
         private LootItem[] crate = Array.Empty<LootItem>(), bag = Array.Empty<LootItem>(), result;
         private LootItem[] completeCrate;
         private int remotePoses, remoteHides;
+        private RaidLocomotion remoteMotion;
         private bool waitForMovingPose;
         private Vector2 firstMovingPose;
         private uint watchedDrop;
@@ -85,6 +86,7 @@ namespace HeavyPockets
                     else
                     {
                         remotePoses++;
+                        remoteMotion = message.Motion;
                         if (waitForMovingPose)
                         {
                             firstMovingPose = message.Position;
@@ -234,7 +236,9 @@ namespace HeavyPockets
             // The first-person camera is completely behind the partition here.
             // Switching into the shoulder view does not move either player's body.
             Client.TogglePerspective();
-            yield return Walk(new Vector2(1.60f, -1f), -33f, 5f);
+            // The Armature first appears before its centre clears the partition at
+            // these positions, both in the 16:10 capture and at 16:9 headless.
+            yield return Walk(new Vector2(1.83f, -1f), -33f, 5f);
             if (remotePoses != 0) { Fail("First-person camera received the hidden runner"); yield break; }
             Client.TogglePerspective();
             Client.SetProbeMotion(Vector2.zero, -33f, 5f);
@@ -279,7 +283,7 @@ namespace HeavyPockets
                 Fail("Remote updates continued behind the partition");
                 yield break;
             }
-            yield return Walk(new Vector2(2.70f, -1f), -33f, 5.25f);
+            yield return Walk(new Vector2(2.80f, -1f), -33f, 5.25f);
             Phase("first-person corner peek");
             yield return new WaitUntil(() => remotePoses > before);
             yield return CheckPartial("first-corner");
@@ -808,6 +812,14 @@ namespace HeavyPockets
             Signal("connected", network.LocalClientId.ToString(CultureInfo.InvariantCulture));
             Phase("both connected");
             yield return new WaitUntil(() => Exists("A.connected") && Exists("B.connected"));
+            if (Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeSurfaces"))
+            {
+                yield return CheckFreightSurfaces();
+                finished = true;
+                Signal("done");
+                Application.Quit(0);
+                yield break;
+            }
             Capture("bay");
 
             if (role == "A")

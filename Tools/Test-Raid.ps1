@@ -4,7 +4,8 @@ param(
     [string]$ReportRoot = ([IO.Path]::Combine([IO.Path]::GetTempPath(), 'HeavyPocketsTests')),
     [switch]$HeadlessClients,
     [switch]$ShowClients,
-    [switch]$CaptureMotion
+    [switch]$CaptureMotion,
+    [switch]$SurfacesOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,6 +59,7 @@ try {
     $options = @('-client','-probeDir',$run,'-screen-fullscreen','0','-screen-width','1152','-screen-height','720','-force-d3d11')
     if ($ShowClients -and !$HeadlessClients) { $options += '-probeCapture' }
     if ($CaptureMotion -and $ShowClients -and !$HeadlessClients) { $options += '-probeMotion' }
+    if ($SurfacesOnly) { $options += '-probeSurfaces' }
     if ($HeadlessClients) { $options += @('-batchmode','-nographics') }
     $a = Start-Player 'A' $clientExe ($options + @('-probeRole','A'))
     Wait-For 'first client connection' { Test-Path -LiteralPath (Join-Path $run 'A.connected') } 60
@@ -66,17 +68,28 @@ try {
         server = $server.Id; A = $a.Id; B = $b.Id; headlessClients = $HeadlessClients.IsPresent
         captureFrames = ($ShowClients.IsPresent -and !$HeadlessClients.IsPresent)
     } | ConvertTo-Json))
-    Wait-For 'blocked open before loot generation' { Test-Path -LiteralPath (Join-Path $run 'A.wall-denied') } 45
-    $generated = 'HEAVY POCKETS CRATE GENERATED after authorized open'
-    if (Select-String -Quiet -LiteralPath $serverLog -SimpleMatch $generated) {
-        throw 'Crate was populated before the first authorized search'
+    if (!$SurfacesOnly) {
+        Wait-For 'blocked open before loot generation' { Test-Path -LiteralPath (Join-Path $run 'A.wall-denied') } 45
+        $generated = 'HEAVY POCKETS CRATE GENERATED after authorized open'
+        if (Select-String -Quiet -LiteralPath $serverLog -SimpleMatch $generated) {
+            throw 'Crate was populated before the first authorized search'
+        }
+        [IO.File]::WriteAllText((Join-Path $run 'server-before-search.checked'), '0')
     }
-    [IO.File]::WriteAllText((Join-Path $run 'server-before-search.checked'), '0')
     Wait-For 'both clients complete' {
         (Test-Path -LiteralPath (Join-Path $run 'A.done')) -and (Test-Path -LiteralPath (Join-Path $run 'B.done'))
     } 205
     foreach ($client in $a,$b) {
         if (-not $client.WaitForExit(15000) -or $client.ExitCode -ne 0) { throw "Client did not exit cleanly: $($client.Id)" }
+    }
+    if ($SurfacesOnly) {
+        foreach ($role in 'A','B') {
+            foreach ($mark in 'freight-1','freight-2','freight-3','landed') {
+                if (!(Test-Path -LiteralPath (Join-Path $run "$role.$mark"))) { throw "Missing $role.$mark" }
+            }
+        }
+        Write-Host 'Both clients confirmed the 0.44, 0.94 and 1.44 m landings and the unassisted drop to the quay.'
+        return
     }
     $generationCount = @(Select-String -LiteralPath $serverLog -SimpleMatch $generated).Count
     [IO.File]::WriteAllText((Join-Path $run 'server-generation.count'), [string]$generationCount)

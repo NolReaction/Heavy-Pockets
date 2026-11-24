@@ -12,6 +12,7 @@ namespace HeavyPockets
         private readonly Font font;
         private readonly Material signInk;
         private readonly List<Mesh> shellMeshes = new List<Mesh>();
+        private static readonly Dictionary<PrimitiveType, Mesh> primitiveMeshes = new Dictionary<PrimitiveType, Mesh>();
 
         internal RaidScenery(Transform root)
         {
@@ -64,13 +65,26 @@ namespace HeavyPockets
 
         private static GameObject Shape(Transform parent, PrimitiveType type, string name, Vector3 pos, Vector3 size, Material material)
         {
-            var go = GameObject.CreatePrimitive(type);
-            go.name = name;
+            GameObject go;
+            if (primitiveMeshes.TryGetValue(type, out Mesh mesh) && mesh != null)
+            {
+                go = new GameObject(name);
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                go.AddComponent<MeshRenderer>();
+            }
+            else
+            {
+                go = GameObject.CreatePrimitive(type);
+                go.name = name;
+                primitiveMeshes[type] = go.GetComponent<MeshFilter>().sharedMesh;
+                var collider = go.GetComponent<Collider>();
+                collider.enabled = false;
+                Object.Destroy(collider);
+            }
             go.transform.SetParent(parent, false);
             go.transform.localPosition = pos;
             go.transform.localScale = size;
             go.GetComponent<Renderer>().sharedMaterial = material;
-            Object.Destroy(go.GetComponent<Collider>());
             return go;
         }
 

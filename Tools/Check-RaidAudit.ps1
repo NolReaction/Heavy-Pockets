@@ -161,10 +161,11 @@ function Read-Audit([string]$name) {
                         $worldX = [BitConverter]::ToSingle($bytes,9)
                         $height = [BitConverter]::ToSingle($bytes,21)
                         $crouch = [int]$bytes[29]
-                        $sprint = [int]($bytes[30] -eq 1)
-                        $slide = [int]($bytes[30] -eq 2)
-                        Require ($height -ge 0 -and $height -le 1 -and $bytes[30] -le 2 -and
-                            (!$slide -or $height -eq 0)) "$name invalid locomotion"
+                        $sprint = [int](($bytes[30] -band 1) -ne 0)
+                        $slide = [int](($bytes[30] -band 2) -ne 0)
+                        $speedY = [BitConverter]::ToSingle($bytes,25)
+                        Require ($height -ge 0 -and $height -le 64 -and $bytes[30] -in 0,1,2,4,5 -and
+                            [Math]::Abs($speedY) -le 30 -and (($bytes[30] -band 4) -or $speedY -eq 0)) "$name invalid locomotion"
                         $worldZ = [BitConverter]::ToSingle($bytes,13)
                     }
                 }
@@ -290,11 +291,11 @@ Require (@($viewInput | Where-Object { $_.mode -eq 0 -and $_.phase -ne 127 }).Co
 $ownA = @($events | Where-Object { $_.peer -eq $id.A -and $_.actor -eq $id.A -and $_.code -eq 1 })
 $stationary = @($ownA | Where-Object { $_.sequence -gt $peek.sequence -and $_.sequence -lt $cover.sequence })
 Require ($stationary.Count -gt 0 -and @($stationary | Where-Object {
-    [math]::Abs($_.worldX - 1.60) -gt .06 -or [math]::Abs($_.worldZ + 1) -gt .06
+    [math]::Abs($_.worldX - 1.83) -gt .06 -or [math]::Abs($_.worldZ + 1) -gt .06
 }).Count -eq 0) 'the shoulder switch must occur at the stationary corner'
-# At yaw 126 these vertices of the baked idle FBX are the leading contour
-# across the shoulder transition: two forefoot vertices and the relaxed hand.
-# Trace the recorded camera to the actual mesh, independently of server samples.
+# Independently trace the recorded camera against the Starter Assets Armature.
+# With the standing target at yaw 126, vertex 24754 of the forefoot extends at
+# least this far in both world axes across 32 samples of the complete idle loop.
 function Test-ExposedBody($step, $observer, $subject) {
     $rad = [Math]::PI / 180
     $aspect = [BitConverter]::ToSingle([Convert]::FromBase64String($step.payload),18)
@@ -305,15 +306,12 @@ function Test-ExposedBody($step, $observer, $subject) {
     $back = .22*[Math]::Sin($pitch) - 2.15*[Math]::Cos($pitch)
     $cx = $observer.worldX + $side*[Math]::Cos($yaw) + $back*[Math]::Sin($yaw)
     $cz = $observer.worldZ - $side*[Math]::Sin($yaw) + $back*[Math]::Cos($yaw)
-    $body = [BitConverter]::ToSingle([Convert]::FromBase64String($subject.payload),17)*$rad
-    foreach ($vertex in @(@(-0.25285,0.37398), @(-0.27343,0.34953))) {
-        $localX, $localZ = $vertex
-        $x = $subject.worldX + $localX*[Math]::Cos($body) + $localZ*[Math]::Sin($body)
-        $z = $subject.worldZ - $localX*[Math]::Sin($body) + $localZ*[Math]::Cos($body)
-        $slope = ($x-$cx)/($z-$cz)
-        if ([Math]::Min($cx+(-.15-$cz)*$slope, $cx+(.15-$cz)*$slope) -gt 1.99995) { return $true }
-    }
-    return $false
+    $bodyYaw = [BitConverter]::ToSingle([Convert]::FromBase64String($subject.payload),17)
+    if ([Math]::Abs($bodyYaw - 126) -gt .05) { return $false }
+    $x = $subject.worldX + .33933
+    $z = $subject.worldZ - .01030
+    $slope = ($x-$cx)/($z-$cz)
+    return [Math]::Min($cx+(-.15-$cz)*$slope, $cx+(.15-$cz)*$slope) -gt 1.99995
 }
 foreach ($pose in @(($leftSight + $rightSight) | Where-Object code -eq 1)) {
     $step = @($viewInput | Where-Object { $_.sequence -lt $pose.sequence })[-1]

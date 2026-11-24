@@ -3,8 +3,8 @@ using UnityEngine;
 
 namespace HeavyPockets
 {
-    // Bakes disconnected hard-surface parts and tapered fabric sections into one mesh
-    // per rigid piece. The crate and avatar never need colliders or per-detail objects.
+    // Bakes disconnected hard-surface details into one mesh per rigid piece.
+    // The port's collision geometry is authored independently of the visual details.
     internal sealed class PropGeometry
     {
         private readonly List<Vector3> vertices = new List<Vector3>();

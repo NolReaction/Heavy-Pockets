@@ -16,6 +16,7 @@ namespace HeavyPockets
             public GearLocation ActiveGear;
             public LootFootprint[] Unknown;
             public Vector2 Position;
+            public RaidLocomotion Motion;
             public float Seconds;
             public float SearchFinishAt;
             public bool WorldLook;
@@ -62,7 +63,7 @@ namespace HeavyPockets
                 Crosshair(mid, height * 0.5f);
                 if (RaidMap.InExit(state.Position))
                     DrawExit(mid, height - 122f, state.Seconds);
-                else if (RaidMap.CanOpen(state.Position))
+                else if (RaidMap.CanOpen(state.Position, state.Motion))
                     Hint(mid, height - 106f, "Обыскать ящик", Amber);
             }
             GUI.matrix = oldMatrix;

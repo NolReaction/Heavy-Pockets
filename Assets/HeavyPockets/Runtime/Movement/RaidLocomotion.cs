@@ -8,11 +8,13 @@ namespace HeavyPockets
     public struct RaidLocomotion
     {
         internal const float WalkSpeed = 2.35f, SprintSpeed = 4.75f, SneakSpeed = 1.35f;
-        internal const float CrouchEyeDrop = .57f, JumpImpulse = 4.65f, Gravity = 14.4f;
+        internal const float CrouchEyeDrop = .57f, JumpImpulse = 5.35f, Gravity = 14.4f;
+        internal const float TerminalSpeed = 30f;
         private const float MinSlideEntry = 3.65f, SlideExitSpeed = 2.0f, SlideDrag = 3.6f;
         public float Height, VerticalSpeed, Crouch;
-        public bool Sprinting, Sliding;
-        public bool Airborne => Height > 0f || VerticalSpeed > 0f;
+        // Height is the world elevation of the soles, including the surface under them.
+        // The default struct is standing on the quay, ready for input.
+        public bool Sprinting, Sliding, Airborne;
         internal float EyeOffset => Height - CrouchEyeDrop * Crouch;
 
         // Button edges arrive on the ordered movement channel, sometimes twice between physics ticks.
@@ -27,11 +29,12 @@ namespace HeavyPockets
                 Sliding = true;
                 Sprinting = false;
             }
-            if ((next & MoveButtons.Jump) != 0 && (Sliding || (!crouch && Crouch < .1f)) && RaidMap.CanStand(position))
+            if ((next & MoveButtons.Jump) != 0 && (Sliding || (!crouch && Crouch < .1f)) && RaidMap.CanStand(position, Height))
             {
                 Sprinting = Sliding || Sprinting;
                 Sliding = false;
                 VerticalSpeed = JumpImpulse;
+                Airborne = true;
             }
         }
 
@@ -45,7 +48,8 @@ namespace HeavyPockets
             MoveButtons buttons, float dt)
         {
             if (dt <= 0f) return;
-            bool crouching = !Airborne && (Sliding || (buttons & MoveButtons.Crouch) != 0 || !RaidMap.CanStand(position));
+            bool crouching = (!Airborne && (Sliding || (buttons & MoveButtons.Crouch) != 0)) ||
+                !RaidMap.CanStand(position, Height);
             Crouch = Mathf.MoveTowards(Crouch, crouching ? 1f : 0f, dt * (Sliding ? 8f : 5.2f));
             float forward = ForwardFraction(direction, yaw);
             if (!Airborne)
@@ -66,8 +70,8 @@ namespace HeavyPockets
                 float acceleration = Airborne ? 4.5f : desired.sqrMagnitude < velocity.sqrMagnitude ? 24f : 17f;
                 velocity = Vector2.MoveTowards(velocity, desired, acceleration * dt);
             }
-            float capsuleTop = RaidMap.StandingHeight + EyeOffset;
-            Vector2 moved = RaidMap.Move(position, velocity * dt, capsuleTop);
+            float bodyHeight = RaidMap.StandingHeight - CrouchEyeDrop * Crouch;
+            Vector2 moved = RaidMap.Move(position, velocity * dt, Height + bodyHeight, Height);
             // A blocked axis can advance a fraction of a substep on contact. Do not retain that
             // component into the next slide tick and continually press the character into the wall.
             Vector2 actual = (moved - position) / dt;
@@ -79,18 +83,34 @@ namespace HeavyPockets
             }
             velocity = actual;
             position = moved;
-            if (Airborne)
+            float floor = RaidMap.FloorBelow(position, Height);
+            if (!Airborne && Height <= floor)
             {
-                Height += (VerticalSpeed - .5f * Gravity * dt) * dt;
-                VerticalSpeed -= Gravity * dt;
-                float clearance = RaidMap.StandingJumpClearance(position);
-                if (Height > clearance && VerticalSpeed > 0f)
-                {
-                    Height = Mathf.Max(0f, clearance);
-                    VerticalSpeed = 0f;
-                }
-                if (Height <= 0f) Height = VerticalSpeed = 0f;
+                Height = floor;
+                return;
             }
+
+            Airborne = true;
+            Sliding = false;
+            float nextSpeed = Mathf.Max(-TerminalSpeed, VerticalSpeed - Gravity * dt);
+            float nextHeight = Height + (VerticalSpeed + nextSpeed) * .5f * dt;
+            if (VerticalSpeed > 0f)
+            {
+                float clearance = RaidMap.CeilingAbove(position, Height + bodyHeight) - bodyHeight;
+                if (nextHeight >= clearance)
+                {
+                    nextHeight = Mathf.Max(Height, clearance);
+                    nextSpeed = 0f;
+                }
+            }
+            if (nextHeight <= floor && nextSpeed <= 0f)
+            {
+                nextHeight = floor;
+                nextSpeed = 0f;
+                Airborne = false;
+            }
+            Height = nextHeight;
+            VerticalSpeed = nextSpeed;
         }
     }
 }

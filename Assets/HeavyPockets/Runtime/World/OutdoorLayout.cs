@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace HeavyPockets
 {
-    internal enum OutdoorKind { Container, Shed, Barrier, Pier, SignalPost, LocomotiveDeck, DieselHood, DriverCab, WagonDeck, TimberLoad }
+    internal enum OutdoorKind { Container, Shed, Barrier, Pier, SignalPost, LocomotiveDeck, DieselHood, DriverCab, WagonDeck, TimberLoad, FreightCrate }
 
     internal readonly struct OutdoorSolid
     {
@@ -47,6 +47,11 @@ namespace HeavyPockets
             new OutdoorSolid(OutdoorKind.Barrier, 8, 17, 5, 1.05f, .85f),
             new OutdoorSolid(OutdoorKind.Barrier, 41, -9, 5, 1.05f, .85f),
             new OutdoorSolid(OutdoorKind.Barrier, -25, 38, 5, 1.05f, .85f),
+
+            // Staged freight next to the first spawn. Each rise is reachable with one standing jump.
+            new OutdoorSolid(OutdoorKind.FreightCrate, -7, -6, 1.8f, .44f, 1.6f),
+            new OutdoorSolid(OutdoorKind.FreightCrate, -9.1f, -6, 1.8f, .94f, 1.6f),
+            new OutdoorSolid(OutdoorKind.FreightCrate, -11.2f, -6, 1.8f, 1.44f, 1.6f),
 
             new OutdoorSolid(OutdoorKind.Pier, 32, 14, 1.3f, 11, 1.3f),
             new OutdoorSolid(OutdoorKind.Pier, 44, 14, 1.3f, 11, 1.3f),

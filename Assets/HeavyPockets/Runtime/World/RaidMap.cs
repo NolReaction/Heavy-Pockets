@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace HeavyPockets
@@ -27,7 +29,50 @@ namespace HeavyPockets
         private static readonly Bounds WearStrip = Box(0, .35f, 0, WallX, .45f, .16f);
         private static readonly Bounds FaceDetails = Box(0, .44f, 0, 1.98f, 2.245f, .17f);
         private static readonly Bounds Placard = Box(0, 1.39f, 0, .83f, 1.81f, .196f);
-        private static readonly Bounds CargoCase = Box(Crate.x, 0, Crate.y, CrateX, .86f, CrateZ);
+        internal static readonly Bounds CargoCase = Box(Crate.x, 0, Crate.y, CrateX, .86f, CrateZ);
+        internal static readonly Bounds[] CollisionBoxes = BuildCollisionBoxes();
+
+        private const float ContactTolerance = .0005f;
+        private const int CellSize = 8;
+        private const int Columns = (int)(RoomX * 2f) / CellSize, Rows = (int)(RoomZ * 2f) / CellSize;
+        private static readonly Bounds[][] collisionCells = BuildCollisionCells();
+
+        private static Bounds[] BuildCollisionBoxes()
+        {
+            var boxes = new Bounds[6 + OutdoorLayout.Occluders.Length];
+            boxes[0] = Partition;
+            boxes[1] = Capping;
+            boxes[2] = WearStrip;
+            boxes[3] = FaceDetails;
+            boxes[4] = Placard;
+            boxes[5] = CargoCase;
+            Array.Copy(OutdoorLayout.Occluders, 0, boxes, 6, OutdoorLayout.Occluders.Length);
+            return boxes;
+        }
+
+        // Insert each footprint into every cell a player's radius can touch.
+        // All motor and foot-contact queries then read one local immutable array.
+        private static Bounds[][] BuildCollisionCells()
+        {
+            var lists = new List<Bounds>[Columns * Rows];
+            foreach (Bounds box in CollisionBoxes)
+            {
+                Vector3 min = box.min, max = box.max;
+                int left = Column(min.x - PlayerRadius), right = Column(max.x + PlayerRadius);
+                int near = Row(min.z - PlayerRadius), far = Row(max.z + PlayerRadius);
+                for (int z = near; z <= far; z++)
+                    for (int x = left; x <= right; x++)
+                        (lists[z * Columns + x] ??= new List<Bounds>()).Add(box);
+            }
+            var cells = new Bounds[lists.Length][];
+            for (int i = 0; i < cells.Length; i++)
+                cells[i] = lists[i]?.ToArray() ?? Array.Empty<Bounds>();
+            return cells;
+        }
+
+        private static int Column(float x) => Mathf.Clamp(Mathf.FloorToInt((x + RoomX) / CellSize), 0, Columns - 1);
+        private static int Row(float z) => Mathf.Clamp(Mathf.FloorToInt((z + RoomZ) / CellSize), 0, Rows - 1);
+        private static Bounds[] Nearby(Vector2 p) => collisionCells[Row(p.y) * Columns + Column(p.x)];
 
         private static Bounds Box(float x, float bottom, float z, float halfX, float top, float halfZ)
         {
@@ -40,62 +85,73 @@ namespace HeavyPockets
             return slot % 2 == 0 ? new Vector2(-4f, -9f) : new Vector2(1.15f, 1.25f);
         }
 
+        // A zero top requests the ground footprint (route checks and older callers).
         public static Vector2 Move(Vector2 from, Vector2 delta, float capsuleTop = 0f)
+            => Move(from, delta, capsuleTop > 0f ? capsuleTop : 2f * ContactTolerance, 0f);
+
+        internal static Vector2 Move(Vector2 from, Vector2 delta, float capsuleTop, float feet)
         {
+            if (delta.sqrMagnitude == 0f) return from;
             // Axis sliding with substeps keeps thin geometry solid even at a slow server tick.
             int steps = Mathf.Max(1, Mathf.CeilToInt(delta.magnitude / 0.14f));
             Vector2 step = delta / steps;
             for (int i = 0; i < steps; i++)
             {
                 var next = new Vector2(Mathf.Clamp(from.x + step.x, -RoomX + PlayerRadius, RoomX - PlayerRadius), from.y);
-                if (!BlockedAtHeight(next, capsuleTop))
+                if (step.x != 0f && !Blocked(next, feet, capsuleTop))
                     from = next;
                 next = new Vector2(from.x, Mathf.Clamp(from.y + step.y, -RoomZ + PlayerRadius, RoomZ - PlayerRadius));
-                if (!BlockedAtHeight(next, capsuleTop))
+                if (step.y != 0f && !Blocked(next, feet, capsuleTop))
                     from = next;
             }
             return from;
         }
 
-        private static bool Blocked(Vector2 p)
+        private static bool TouchesFootprint(Bounds box, Vector2 p)
         {
-            if (InBox(p, Vector2.zero, WallX + PlayerRadius, WallZ + PlayerRadius)
-                || InBox(p, Crate, CrateX + PlayerRadius, CrateZ + PlayerRadius)) return true;
-
-            foreach (OutdoorSolid solid in OutdoorLayout.Solids)
-            {
-                Vector3 center = solid.Bounds.center, half = solid.Bounds.extents;
-                float dx = Mathf.Max(Mathf.Abs(p.x - center.x) - half.x, 0f);
-                float dz = Mathf.Max(Mathf.Abs(p.y - center.z) - half.z, 0f);
-                if (dx * dx + dz * dz < PlayerRadius * PlayerRadius) return true;
-            }
-            return false;
+            Vector3 center = box.center, half = box.extents;
+            float dx = Mathf.Max(Mathf.Abs(p.x - center.x) - half.x, 0f);
+            float dz = Mathf.Max(Mathf.Abs(p.y - center.z) - half.z, 0f);
+            return dx * dx + dz * dz < PlayerRadius * PlayerRadius;
         }
 
-        private static bool BlockedAtHeight(Vector2 p, float capsuleTop) => Blocked(p) ||
-            (capsuleTop > 0f && StandingJumpClearance(p) < capsuleTop - StandingHeight);
+        private static bool Blocked(Vector2 p, float feet, float top)
+        {
+            foreach (Bounds box in Nearby(p))
+                if (box.max.y > feet + ContactTolerance && box.min.y < top - ContactTolerance &&
+                    TouchesFootprint(box, p)) return true;
+            return false;
+        }
 
         private static bool InBox(Vector2 p, Vector2 center, float x, float z)
         {
             return Mathf.Abs(p.x - center.x) <= x && Mathf.Abs(p.y - center.y) <= z;
         }
 
-        // The case and partition exclude the entire footprint. Only fittings mounted above the
-        // crouched capsule can overhang a reachable part of the floor.
-        internal static float StandingJumpClearance(Vector2 p)
+        // The highest top already under the feet. A wall alongside the player
+        // cannot become a landing surface until the feet have actually cleared it.
+        internal static float FloorBelow(Vector2 p, float feet)
         {
-            float overhead = Mathf.Min(UndersideAt(Capping, p), UndersideAt(Placard, p));
-            return overhead - StandingHeight;
+            float floor = 0f;
+            foreach (Bounds box in Nearby(p))
+            {
+                float top = box.max.y;
+                if (top > floor && top <= feet + ContactTolerance && TouchesFootprint(box, p)) floor = top;
+            }
+            return floor;
         }
 
-        internal static bool CanStand(Vector2 p) => !Blocked(p) && StandingJumpClearance(p) >= 0f;
+        internal static bool CanStand(Vector2 p, float feet = 0f) => !Blocked(p, feet, feet + StandingHeight);
 
-        private static float UndersideAt(Bounds box, Vector2 p)
+        internal static float CeilingAbove(Vector2 p, float head)
         {
-            Vector3 center = box.center, half = box.extents;
-            float dx = Mathf.Max(0f, Mathf.Abs(p.x - center.x) - half.x);
-            float dz = Mathf.Max(0f, Mathf.Abs(p.y - center.z) - half.z);
-            return dx * dx + dz * dz < PlayerRadius * PlayerRadius ? center.y - half.y : float.PositiveInfinity;
+            float ceiling = float.PositiveInfinity;
+            foreach (Bounds box in Nearby(p))
+            {
+                float bottom = box.min.y;
+                if (bottom < ceiling && bottom >= head - ContactTolerance && TouchesFootprint(box, p)) ceiling = bottom;
+            }
+            return ceiling;
         }
 
         public static bool InExit(Vector2 p)
@@ -103,24 +159,26 @@ namespace HeavyPockets
             return InBox(p, Exit, ExitX, ExitZ);
         }
 
-        public static bool CanOpen(Vector2 p)
+        internal static bool WithinReach(Vector2 p, float feet)
         {
-            return (p - Crate).sqrMagnitude <= Reach * Reach && HasSightLine(p, Crate);
+            float aboveCase = Mathf.Max(0f, feet - CargoCase.max.y);
+            return (p - Crate).sqrMagnitude + aboveCase * aboveCase <= Reach * Reach;
         }
 
-        // All players have the same standing eye height. The partition crosses it,
-        // while the low cargo case does not. Both endpoints are authoritative.
-        public static bool HasSightLine(Vector2 from, Vector2 to)
+        public static bool CanOpen(Vector2 p, RaidLocomotion motion = default)
         {
-            float first = 0f, last = 1f;
-            Vector2 direction = to - from;
-            bool crossesWall = ClipAxis(from.x, direction.x, WallX, ref first, ref last)
-                && ClipAxis(from.y, direction.y, WallZ, ref first, ref last);
-            if (crossesWall) return false;
-            return ClearYardSegment(RaidCameraBoom.Eye(from), new Vector3(direction.x, 0, direction.y));
+            if (!WithinReach(p, motion.Height)) return false;
+            Vector3 eye = RaidCameraBoom.Eye(p) + Vector3.up * motion.EyeOffset;
+            Vector3 lid = new Vector3(Crate.x, CargoCase.max.y + .01f, Crate.y);
+            return ClearSegment(eye, lid);
         }
 
-        // Keep the eye-to-crate interaction rule separate from camera-to-mesh replication.
+        public static bool HasSightLine(Vector2 from, Vector2 to, float fromEyeOffset = 0f, float toEyeOffset = 0f)
+        {
+            return ClearSegment(RaidCameraBoom.Eye(from) + Vector3.up * fromEyeOffset,
+                RaidCameraBoom.Eye(to) + Vector3.up * toEyeOffset);
+        }
+
         internal static bool ClearSegment(Vector3 from, Vector3 to)
         {
             Vector3 ray = to - from;
@@ -135,9 +193,7 @@ namespace HeavyPockets
 
         private static bool ClearYardSegment(Vector3 from, Vector3 ray)
         {
-            foreach (Bounds box in OutdoorLayout.Occluders)
-                if (Intersects(box, from, ray, 1f, out _)) return false;
-            return true;
+            return !YardOcclusion.BlocksSight(from, ray);
         }
 
         internal static bool Intersects(Bounds box, Vector3 origin, Vector3 direction, float length, out float first)
@@ -174,7 +230,7 @@ namespace HeavyPockets
             float sin = Mathf.Sin(yaw * Mathf.Deg2Rad), cos = Mathf.Cos(yaw * Mathf.Deg2Rad);
             return SeesSamples(view, actor, sin, cos, TorsoSamples, motion.EyeOffset) ||
                 (standing && !motion.Airborne && motion.Crouch < .02f &&
-                 SeesSamples(view, actor, sin, cos, RestingLegSamples, 0f));
+                 SeesSamples(view, actor, sin, cos, RestingLegSamples, motion.Height));
         }
 
         private static bool SeesSamples(RaidView view, Vector2 actor, float sin, float cos, Vector3[] samples, float heightOffset)

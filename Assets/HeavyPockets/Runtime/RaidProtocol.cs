@@ -91,7 +91,8 @@ namespace HeavyPockets
                     Put(bytes, 21, message.Motion.Height);
                     Put(bytes, 25, message.Motion.VerticalSpeed);
                     bytes[29] = (byte)Mathf.RoundToInt(Mathf.Clamp01(message.Motion.Crouch) * 255f);
-                    bytes[30] = message.Motion.Sliding ? (byte)2 : message.Motion.Sprinting ? (byte)1 : (byte)0;
+                    bytes[30] = (byte)((message.Motion.Sliding ? 2 : message.Motion.Sprinting ? 1 : 0) |
+                        (message.Motion.Airborne ? 4 : 0));
                     break;
                 case RaidEventKind.Left:
                     bytes = new byte[9];
@@ -187,11 +188,13 @@ namespace HeavyPockets
                     message.Yaw = BitConverter.ToSingle(bytes, 17);
                     message.Motion = new RaidLocomotion { Height = BitConverter.ToSingle(bytes, 21),
                         VerticalSpeed = BitConverter.ToSingle(bytes, 25), Crouch = bytes[29] / 255f,
-                        Sprinting = bytes[30] == 1, Sliding = bytes[30] == 2 };
+                        Sprinting = (bytes[30] & 1) != 0, Sliding = (bytes[30] & 2) != 0,
+                        Airborne = (bytes[30] & 4) != 0 };
                     return Finite(message.Position.x) && Finite(message.Position.y) && Finite(message.Yaw) &&
-                        message.Motion.Height >= 0f && message.Motion.Height <= 1f &&
-                        Mathf.Abs(message.Motion.VerticalSpeed) <= 5f && bytes[30] <= 2 &&
-                        (!message.Motion.Sliding || !message.Motion.Airborne);
+                        message.Motion.Height >= 0f && message.Motion.Height <= 64f &&
+                        Mathf.Abs(message.Motion.VerticalSpeed) <= RaidLocomotion.TerminalSpeed && bytes[30] <= 5 &&
+                        (message.Motion.Airborne || message.Motion.VerticalSpeed == 0f) &&
+                        (!message.Motion.Sliding || !message.Motion.Sprinting);
                 case RaidEventKind.Left when bytes.Length == 9:
                     message.Actor = BitConverter.ToUInt64(bytes, 1);
                     return true;

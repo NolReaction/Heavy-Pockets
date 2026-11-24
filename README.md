@@ -20,7 +20,13 @@
 
 ### Windows
 
+Для совместного теста откройте **Heavy Pockets → Тест на двух игроков → Запустить два окна**. Unity проверит сохранённые файлы проекта, при необходимости соберёт локальные клиент и сервер и откроет два окна рядом на одном мониторе. Первый запуск занимает время, ход сборки виден в Console. У каждого игрока отдельный ввод. **Alt+Tab** переключает окна, **Esc** освобождает мышь. Оба окна продолжают получать состояние одного рейда. Чтобы закончить тест, закройте одно из игровых окон или выберите **Тест на двух игроков → Остановить**.
+
 Для Play в редакторе выберите **Heavy Pockets → Build Windows dedicated server**.
+
+В режиме двух окон игроки появляются лицом друг к другу у трёх грузовых ящиков высотой 44, 94 и 144 см. Подойдите к низкому ящику, удерживайте движение вперёд и нажмите **Пробел**. Так можно подняться по ряду до самого высокого ящика, а затем просто сойти с края. Второй игрок видит высоту, прыжок и приземление первого.
+
+Чтобы поставить свою модель обыскиваемого сундука, сохраните prefab с видимым **Mesh Renderer** в `Assets/HeavyPockets/Resources/CargoChest.prefab`. При следующем запуске модель займёт место жёлтого сундука. Игра выставляет основание на пол и масштабирует модель по каждой оси под действующий хитбокс шириной 1,10 м, высотой 0,86 м и глубиной 0,72 м. Близкие пропорции исходной модели дадут меньше искажений.
 
 Архивы предыдущих выпусков содержат закрытый терминал и прежних персонажей. [Windows x64](Releases/Heavy-Pockets-Depot-Windows.zip) · [Easy Anti-Cheat](Releases/Heavy-Pockets-Movement-EAC.zip)
 
@@ -91,6 +97,7 @@
 ~~~powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Build-Raid.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Test-Raid.ps1 -ShowClients -CaptureMotion -Port 18156
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Test-Raid.ps1 -HeadlessClients -SurfacesOnly
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Test-RaidInvitations.ps1
 ~~~
 

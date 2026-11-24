@@ -30,6 +30,7 @@ namespace HeavyPockets
                 float t = Mathf.Clamp01((float)(clock - from.Time) / duration);
                 var motion = new RaidLocomotion
                 {
+                    Height = Mathf.Lerp(from.Motion.Height, to.Motion.Height, t),
                     Crouch = Mathf.Lerp(from.Motion.Crouch, to.Motion.Crouch, t),
                     Sprinting = t < .5f ? from.Motion.Sprinting : to.Motion.Sprinting,
                     Sliding = t < .5f ? from.Motion.Sliding : to.Motion.Sliding
@@ -48,29 +49,39 @@ namespace HeavyPockets
                 float t, ref RaidLocomotion motion)
             {
                 const float gravity = RaidLocomotion.Gravity;
-                if (from.Airborne && to.Airborne && from.VerticalSpeed >= to.VerticalSpeed)
+                if (from.Airborne && to.Airborne)
                 {
                     // The velocity change gives the elapsed physics time independently of delivery jitter.
-                    float flightTime = (from.VerticalSpeed - to.VerticalSpeed) / gravity;
+                    // Bound it at ceilings, where the head contact can cancel upward speed in one tick.
+                    float flightTime = Mathf.Clamp((from.VerticalSpeed - to.VerticalSpeed) / gravity, 0f, duration + .017f);
                     motion.Height = Mathf.Lerp(from.Height, to.Height, t) + .5f * gravity * flightTime * flightTime * t * (1f - t);
                     motion.VerticalSpeed = Mathf.Lerp(from.VerticalSpeed, to.VerticalSpeed, t);
+                    motion.Airborne = true;
                     return;
                 }
 
-                // Land and take off at the floor, including when a second jump starts between packets.
-                float untilLand = from.Airborne ? TimeToFloor(from.Height, from.VerticalSpeed) : 0f;
-                float sinceLift = to.Airborne ? TimeToFloor(to.Height, -to.VerticalSpeed) : 0f;
-                duration = Mathf.Max(duration, untilLand + sinceLift);
-                bool landing = t * duration < untilLand;
+                bool landing = from.Airborne;
+                RaidLocomotion sample = landing ? from : to;
+                float surface = landing ? to.Height : from.Height;
+                float height = sample.Height - surface;
+                float flightTimeAtContact = !landing && height < 0f
+                    ? -sample.VerticalSpeed / gravity // Walking off a ledge begins with zero vertical speed.
+                    : TimeToSurface(height, landing ? sample.VerticalSpeed : -sample.VerticalSpeed);
+                duration = Mathf.Max(duration, flightTimeAtContact);
                 float elapsed = landing ? t * duration : (t - 1f) * duration;
-                if (!landing && -elapsed >= sinceLift) return;
-                var sample = landing ? from : to;
+                if (Mathf.Abs(elapsed) >= flightTimeAtContact)
+                {
+                    motion.Height = surface;
+                    return;
+                }
                 motion.Height = Mathf.Max(0f, sample.Height + (sample.VerticalSpeed - .5f * gravity * elapsed) * elapsed);
                 motion.VerticalSpeed = sample.VerticalSpeed - gravity * elapsed;
+                motion.Airborne = true;
             }
 
-            private static float TimeToFloor(float height, float velocity) =>
-                (velocity + Mathf.Sqrt(velocity * velocity + 2f * RaidLocomotion.Gravity * height)) / RaidLocomotion.Gravity;
+            private static float TimeToSurface(float height, float velocity) =>
+                (velocity + Mathf.Sqrt(Mathf.Max(0f, velocity * velocity + 2f * RaidLocomotion.Gravity * height))) /
+                RaidLocomotion.Gravity;
         }
 
         private sealed class PoseTrack
@@ -267,10 +278,10 @@ namespace HeavyPockets
                         ownTrack.Push(e, !HasOwnPose);
                         if (!HasOwnPose && view != null)
                         {
-                            yaw = OwnPosition.y < 0f ? 51f : -109f;
+                            yaw = e.Yaw;
                             pitch = OwnPosition.y < 0f ? 2f : 24f;
                             displayPosition = OwnPosition;
-                            ownModel = scenery.InstantiatePlayer(e.Actor, new Vector3(e.Position.x, 0, e.Position.y), yaw);
+                            ownModel = scenery.InstantiatePlayer(e.Actor, new Vector3(e.Position.x, e.Motion.Height, e.Position.y), yaw);
                             ownGait = ownModel.GetComponent<FreightRunnerGait>();
                             UpdateCamera(true);
                             if (captureOnSpawn && !ScriptedInput && Application.isFocused) CaptureCursor();
@@ -503,9 +514,12 @@ namespace HeavyPockets
             // interpolation around the end of the partition could cut across its corner.
             RenderPose pose = ownTrack.Sample();
             Vector2 expected = pose.Position;
+            // A step off a ledge moves horizontally before gravity lowers the soles.
+            float travelFeet = Mathf.Max(displayHeight, pose.Motion.Height);
             displayHeight = pose.Motion.Height;
             displayCrouch = pose.Motion.Crouch;
-            displayPosition = RaidMap.Move(displayPosition, expected - displayPosition);
+            displayPosition = pose.Motion.Airborne ? expected : RaidMap.Move(displayPosition, expected - displayPosition,
+                travelFeet + RaidMap.StandingHeight - displayCrouch * RaidLocomotion.CrouchEyeDrop, travelFeet);
             // After a prolonged stall recover a separated camera anchor. For ordinary
             // cornering keep sliding along the wall until the sampled route clears it.
             if ((displayPosition - expected).sqrMagnitude > 1f) displayPosition = OwnPosition;
@@ -685,6 +699,7 @@ namespace HeavyPockets
                 Unknown = inventory.Unknown,
                 CrateItems = inventory.Crate,
                 Position = OwnPosition,
+                Motion = OwnMotion,
                 Seconds = exitSeconds
             });
         }

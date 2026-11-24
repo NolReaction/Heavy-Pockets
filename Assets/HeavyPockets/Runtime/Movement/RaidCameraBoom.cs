@@ -37,7 +37,7 @@ namespace HeavyPockets
     // footprints used for movement, padded to keep the near plane clear.
     internal static class RaidCameraBoom
     {
-        private const float Clearance = 0.16f;
+        internal const float Clearance = 0.16f;
         internal const float MaxPitch = 82f;
         internal const float VerticalFov = 76f, NearClip = .045f, FarClip = 650f;
         internal const float MinAspect = .25f, MaxAspect = 3.6f;
@@ -92,7 +92,14 @@ namespace HeavyPockets
         }
 
         private static readonly Bounds Partition = Obstacle(Vector2.zero, RaidMap.WallX + 0.02f, RaidMap.WallZ + 0.05f, 2.34f);
-        private static readonly Bounds Cargo = Obstacle(RaidMap.Crate, RaidMap.CrateX, RaidMap.CrateZ, 0.86f);
+        private static readonly Bounds Cargo = PaddedCargoCase();
+
+        private static Bounds PaddedCargoCase()
+        {
+            Bounds box = RaidMap.CargoCase;
+            box.Expand(2f * Clearance);
+            return box;
+        }
 
         private static Bounds Obstacle(Vector2 center, float halfX, float halfZ, float height)
         {
@@ -109,12 +116,7 @@ namespace HeavyPockets
                 length = Mathf.Min(length, (Clearance + .04f - eye.y) / direction.y);
             if (RaidMap.Intersects(Partition, eye, direction, length, out float wall)) length = wall;
             if (RaidMap.Intersects(Cargo, eye, direction, length, out float crate)) length = crate;
-            foreach (Bounds box in OutdoorLayout.Occluders)
-            {
-                Bounds padded = box;
-                padded.Expand(2f * Clearance);
-                if (RaidMap.Intersects(padded, eye, direction, length, out float contact)) length = contact;
-            }
+            length = YardOcclusion.ClipCamera(eye, direction, length);
             return Mathf.Max(0f, length);
         }
 

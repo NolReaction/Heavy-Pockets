@@ -116,3 +116,50 @@ function Start-LocalRaidChild {
     }
     return [Diagnostics.Process]::Start($info)
 }
+
+function Initialize-LocalRaidWindows {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
+// Unity players create native windows after the process starts. Tile their outer frames
+// in the work area of the monitor where the user launched the playtest.
+public static class LocalRaidWindows
+{
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo { public int Size; public Rect Monitor, Work; public uint Flags; }
+
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr window, uint fallback);
+    [DllImport("user32.dll")] private static extern bool GetMonitorInfoW(IntPtr monitor, ref MonitorInfo info);
+    [DllImport("user32.dll")] private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool SetWindowText(IntPtr window, string title);
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
+
+    public static Rect WorkArea()
+    {
+        SetThreadDpiAwarenessContext(new IntPtr(-4)); // Per-monitor DPI aware on Windows 10 and 11.
+        var info = new MonitorInfo { Size = Marshal.SizeOf(typeof(MonitorInfo)) };
+        if (!GetMonitorInfoW(MonitorFromWindow(GetForegroundWindow(), 1), ref info))
+            throw new InvalidOperationException("Could not locate the playtest monitor.");
+        return info.Work;
+    }
+
+    public static bool Tile(Process player, Rect work, int index)
+    {
+        player.Refresh();
+        IntPtr window = player.MainWindowHandle;
+        if (window == IntPtr.Zero) return false;
+        int width = (work.Right - work.Left) / 2;
+        int height = Math.Min(work.Bottom - work.Top, width * 10 / 16 + 32);
+        int left = index == 0 ? work.Left : work.Left + width;
+        int top = (work.Top + work.Bottom - height) / 2;
+        SetWindowText(window, "Heavy Pockets | Player " + (index + 1));
+        return SetWindowPos(window, IntPtr.Zero, left, top, width, height, 0x14); // Keep Z order and focus.
+    }
+}
+'@
+}
