@@ -9,7 +9,7 @@ namespace HeavyPockets
     public sealed partial class RaidClient
     {
         private byte basePouchLevel = 1;
-        private bool lightingLook;
+        private bool settingsLook, settingsMoving;
         private bool ViewingSettings => screen == RaidScreen.Lighting || screen == RaidScreen.Graphics;
         private bool InPauseMenu => screen == RaidScreen.Menu || screen == RaidScreen.Animations || ViewingSettings || screen == RaidScreen.Maps;
 
@@ -18,20 +18,31 @@ namespace HeavyPockets
             hud?.CloseAnimationPreview();
             hud?.CloseLightingControls();
             if (screen == RaidScreen.Graphics) hud?.CloseGraphicsControls();
-            lightingLook = false;
+            StopSettingsLook();
         }
 
-        private void UpdateLightingLook()
+        private void StopSettingsLook()
         {
-            if (Input.GetMouseButtonDown(1)) lightingLook = !RaidHud.PointerOverSettings();
-            if (!lightingLook) return;
-            if (Input.GetMouseButton(1))
-            {
-                RunnerInput.Look(ref yaw, ref pitch);
-                if (Time.unscaledTime < nextSend) return;
-            }
-            else lightingLook = false;
+            if (!settingsLook) return;
+            settingsLook = settingsMoving = false;
             SendMovement(Vector2.zero);
+        }
+
+        private void UpdateSettingsLook()
+        {
+            if (Input.GetMouseButtonDown(1)) settingsLook = !RaidHud.PointerOverSettings();
+            if (!settingsLook) return;
+            if (!Input.GetMouseButton(1))
+            {
+                StopSettingsLook();
+                return;
+            }
+            RunnerInput.Look(ref yaw, ref pitch);
+            Vector2 keys = screen == RaidScreen.Graphics ? RunnerInput.Keys() : Vector2.zero;
+            bool moving = keys != Vector2.zero;
+            if (Time.unscaledTime < nextSend && !(settingsMoving && !moving)) return;
+            SendMovement(RunnerInput.WorldDirection(keys, yaw));
+            settingsMoving = moving;
         }
 
         private void LeaveAnimationPreview()
@@ -91,20 +102,17 @@ namespace HeavyPockets
                     hud.ResetMenuInput();
                     break;
                 case RaidMenuAction.Lighting when screen == RaidScreen.Menu:
-                    lightingLook = false;
                     hud.OpenLightingControls();
                     screen = RaidScreen.Lighting;
                     break;
                 case RaidMenuAction.Graphics when screen == RaidScreen.Menu:
-                    lightingLook = false;
                     hud.OpenGraphicsControls();
                     screen = RaidScreen.Graphics;
                     break;
                 case RaidMenuAction.BackToMenu when ViewingSettings:
                     if (screen == RaidScreen.Graphics) hud.CloseGraphicsControls();
                     else hud.CloseLightingControls();
-                    if (lightingLook) SendMovement(Vector2.zero);
-                    lightingLook = false;
+                    StopSettingsLook();
                     screen = RaidScreen.Menu;
                     hud.ResetMenuInput();
                     break;

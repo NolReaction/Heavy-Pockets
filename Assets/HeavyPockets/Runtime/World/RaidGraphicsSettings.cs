@@ -11,6 +11,10 @@ namespace HeavyPockets
         private const string RadiusKey = Prefix + "OcclusionRadius";
         private const string ReflectionsKey = Prefix + "LocalReflections";
         private const string IntensityKey = Prefix + "ReflectionIntensity";
+        private const string CookiesKey = Prefix + "WindowCookies";
+        private const string ToneKey = Prefix + "Tonemapping";
+        private const string ExposureKey = Prefix + "ExposureEV";
+        internal static event System.Action WindowCookiesChanged;
         private static bool dirty;
 
         internal static int Msaa
@@ -63,6 +67,28 @@ namespace HeavyPockets
 
         internal static void ApplyReflections() => RoomReflection.SetOptions(LocalReflections, ReflectionIntensity);
 
+        internal static bool WindowCookies
+        {
+            get => PlayerPrefs.GetInt(CookiesKey, 1) != 0;
+            set { if (SetToggle(CookiesKey, WindowCookies, value)) WindowCookiesChanged?.Invoke(); }
+        }
+
+        internal static bool Tonemapping
+        {
+            get => PlayerPrefs.GetInt(ToneKey, 1) != 0;
+            set { if (SetToggle(ToneKey, Tonemapping, value)) RaidCameraSampling.ApplyTonemapping(); }
+        }
+
+        internal static float ExposureEV
+        {
+            get => Read(ExposureKey, RaidToneMapping.DefaultExposure, RaidToneMapping.MinExposure, RaidToneMapping.MaxExposure);
+            set
+            {
+                if (SetNumber(ExposureKey, ExposureEV, value, RaidToneMapping.MinExposure, RaidToneMapping.MaxExposure))
+                    RaidCameraSampling.ApplyTonemapping();
+            }
+        }
+
         private static float Read(string key, float fallback, float min, float max)
         {
             float value = PlayerPrefs.GetFloat(key, fallback);
@@ -95,9 +121,14 @@ namespace HeavyPockets
             PlayerPrefs.DeleteKey(RadiusKey);
             PlayerPrefs.DeleteKey(ReflectionsKey);
             PlayerPrefs.DeleteKey(IntensityKey);
+            PlayerPrefs.DeleteKey(CookiesKey);
+            PlayerPrefs.DeleteKey(ToneKey);
+            PlayerPrefs.DeleteKey(ExposureKey);
             RaidCameraSampling.ApplySampling();
             RaidCameraSampling.ApplyOcclusion();
+            RaidCameraSampling.ApplyTonemapping();
             ApplyReflections();
+            WindowCookiesChanged?.Invoke();
             dirty = true;
             Save();
         }

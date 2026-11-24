@@ -538,7 +538,7 @@ namespace HeavyPockets
             WeighPlatform();
             UpdateViewport();
             shoulderPhase = RaidCameraBoom.AdvanceShoulder(shoulderPhase, CameraMode, Time.unscaledDeltaTime);
-            if (!extracted && (ScriptedInput || InPauseMenu) &&
+            if (!extracted && (ScriptedInput || InPauseMenu && !settingsLook) &&
                 (pendingProbeView || (Time.unscaledTime >= nextSend &&
                 lastShoulderSample != RaidCameraBoom.SampleShoulder(shoulderPhase, CameraMode))))
             {
@@ -561,7 +561,7 @@ namespace HeavyPockets
                             hud.AnimationPreviewKey(step, side, enter || Input.GetKeyDown(KeyCode.Space));
                         }
                         else if (ViewingSettings)
-                            UpdateLightingLook();
+                            UpdateSettingsLook();
                         else if (enter || step != 0) hud.MenuKey(InventoryState(), step, enter);
                     }
                 }
@@ -879,7 +879,7 @@ namespace HeavyPockets
             if (!focused && view != null)
             {
                 inventoryLooking = false;
-                lightingLook = false;
+                StopSettingsLook();
                 hud?.CloseLightingControls();
                 if (screen == RaidScreen.Graphics) hud?.CloseGraphicsControls();
                 if (!ScriptedInput)

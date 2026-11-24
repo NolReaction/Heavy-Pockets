@@ -72,7 +72,8 @@ namespace HeavyPockets
             float dusk = 1f - Blend(-.16f, .18f, height);
             Shader.SetGlobalFloat("_HarborDusk", dusk);
             RoomReflection.SetDusk(dusk);
-            InteriorDaylight.SetDaylight(daylight * (.48f + .52f * Mathf.Clamp01(sunlight)) * (1f - .28f * overcast));
+            InteriorDaylight.SetDaylight(daylight * (.48f + .52f * Mathf.Clamp01(sunlight)) * (1f - .28f * overcast),
+                Mathf.Clamp01(sunlight) * (1f - overcast), dir);
             Shader.SetGlobalVector("_HarborSunDirection", dir);
             Shader.SetGlobalFloat("_HarborCloudCoverage", clouds);
 

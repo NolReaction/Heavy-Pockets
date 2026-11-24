@@ -19,6 +19,7 @@ namespace HeavyPockets
             profileSamples = QualitySettings.antiAliasing;
             ApplySampling();
             ApplyOcclusion();
+            ApplyTonemapping();
             RaidGraphicsSettings.ApplyReflections();
         }
 
@@ -34,6 +35,11 @@ namespace HeavyPockets
             if (!active) return;
             int samples = RaidGraphicsSettings.Msaa;
             if (QualitySettings.antiAliasing != samples) QualitySettings.antiAliasing = samples;
+        }
+
+        internal static void ApplyTonemapping()
+        {
+            if (active) RaidToneMapping.Configure(active.view, RaidGraphicsSettings.Tonemapping, RaidGraphicsSettings.ExposureEV);
         }
 
         // Cutout coverage is only meaningful on a multisampled colour target.

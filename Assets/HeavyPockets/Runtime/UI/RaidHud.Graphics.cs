@@ -5,7 +5,7 @@ namespace HeavyPockets
 {
     internal sealed partial class RaidHud
     {
-        private enum GraphicsRow { Msaa, Occlusion, Strength, Radius, Reflections, Intensity, Reset, Back }
+        private enum GraphicsRow { Msaa, WindowCookies, Tonemapping, Exposure, Occlusion, Strength, Radius, Reflections, Intensity, Reset, Back }
         private static readonly int[] SampleCounts = { 0, 2, 4, 8 };
         private static readonly string[] SampleNames = { "Выкл", "2×", "4×", "8×" };
         private GraphicsRow graphicsFocus;
@@ -28,12 +28,14 @@ namespace HeavyPockets
         {
             const float edge = 20f;
             float w = rail - edge * 2f;
-            float step = Mathf.Min(61f, (height - 150f) / 6f);
-            float top = 72f + (int)row * step;
+            if (row == GraphicsRow.Msaa) return new Rect(edge, 66f, w, 46f);
             if (row == GraphicsRow.Reset) return new Rect(edge, height - 49f, w - 85f, 32f);
             if (row == GraphicsRow.Back) return new Rect(rail - edge - 77f, height - 49f, 77f, 32f);
-            return new Rect(edge, top, w,
-                row == GraphicsRow.Occlusion || row == GraphicsRow.Reflections ? 35f : step - 5f);
+            const float top = 122f;
+            int rows = (int)GraphicsRow.Reset - 1;
+            float step = Mathf.Min(52f, (height - 80f - top) / rows);
+            float rowHeight = GraphicsSlider(row) ? step - 5f : Mathf.Min(35f, step - 5f);
+            return new Rect(edge, top + ((int)row - 1) * step, w, rowHeight);
         }
 
         private static Rect SampleButton(Rect row, int i)
@@ -43,29 +45,32 @@ namespace HeavyPockets
         }
 
         private static bool GraphicsSlider(GraphicsRow row) =>
-            row == GraphicsRow.Strength || row == GraphicsRow.Radius || row == GraphicsRow.Intensity;
+            row is GraphicsRow.Strength or GraphicsRow.Radius or GraphicsRow.Intensity or GraphicsRow.Exposure;
 
         private static bool GraphicsAvailable(GraphicsRow row) => row switch
         {
             GraphicsRow.Strength or GraphicsRow.Radius => RaidGraphicsSettings.AmbientOcclusion,
             GraphicsRow.Intensity => RaidGraphicsSettings.LocalReflections,
+            GraphicsRow.Exposure => RaidGraphicsSettings.Tonemapping,
             _ => true
         };
 
-        // The radius is shown in metres. The other sliders are dimensionless multipliers.
         private static float GraphicsValue(GraphicsRow row) => row switch
         {
             GraphicsRow.Strength => RaidGraphicsSettings.OcclusionStrength,
             GraphicsRow.Radius => RaidGraphicsSettings.OcclusionRadius,
+            GraphicsRow.Exposure => RaidGraphicsSettings.ExposureEV,
             _ => RaidGraphicsSettings.ReflectionIntensity
         };
 
         private static void GraphicsRange(GraphicsRow row, out float min, out float max, out float step)
         {
-            bool radius = row == GraphicsRow.Radius;
-            min = radius ? .1f : 0f;
-            max = radius ? 1.2f : 2f;
-            step = radius ? .02f : .05f;
+            (min, max, step) = row switch
+            {
+                GraphicsRow.Radius => (.1f, 1.2f, .02f),
+                GraphicsRow.Exposure => (RaidToneMapping.MinExposure, RaidToneMapping.MaxExposure, .1f),
+                _ => (0f, 2f, .05f)
+            };
         }
 
         private static void SetGraphicsValue(GraphicsRow row, float value)
@@ -75,6 +80,7 @@ namespace HeavyPockets
             if (Mathf.Approximately(value, GraphicsValue(row))) return;
             if (row == GraphicsRow.Strength) RaidGraphicsSettings.OcclusionStrength = value;
             else if (row == GraphicsRow.Radius) RaidGraphicsSettings.OcclusionRadius = value;
+            else if (row == GraphicsRow.Exposure) RaidGraphicsSettings.ExposureEV = value;
             else RaidGraphicsSettings.ReflectionIntensity = value;
         }
 
@@ -82,6 +88,8 @@ namespace HeavyPockets
         {
             switch (row)
             {
+                case GraphicsRow.WindowCookies: RaidGraphicsSettings.WindowCookies = !RaidGraphicsSettings.WindowCookies; break;
+                case GraphicsRow.Tonemapping: RaidGraphicsSettings.Tonemapping = !RaidGraphicsSettings.Tonemapping; break;
                 case GraphicsRow.Occlusion: RaidGraphicsSettings.AmbientOcclusion = !RaidGraphicsSettings.AmbientOcclusion; break;
                 case GraphicsRow.Reflections: RaidGraphicsSettings.LocalReflections = !RaidGraphicsSettings.LocalReflections; break;
                 case GraphicsRow.Reset: RaidGraphicsSettings.RestoreDefaults(); break;
@@ -178,6 +186,7 @@ namespace HeavyPockets
             Text(20, 41, rail - 40f, 21f, "Цветовое пространство", 12, Muted);
             string colorSpace = QualitySettings.activeColorSpace == ColorSpace.Linear ? "Linear" : "Gamma";
             Text(20, 41, rail - 40f, 21f, colorSpace, 12, Mint, true, TextAnchor.MiddleRight);
+            Text(20f, height - 79f, rail - 40f, 24f, "ПКМ над сценой + WASD для движения", 12, Muted);
             for (int i = 0; i <= (int)GraphicsRow.Back; i++)
             {
                 var row = (GraphicsRow)i;
@@ -208,34 +217,54 @@ namespace HeavyPockets
                 float value = GraphicsValue(row);
                 bool enabled = GraphicsAvailable(row);
                 Color color = enabled ? highlight ? Paper : Muted : Color.Lerp(Muted, StationInk, .48f);
-                string name = row == GraphicsRow.Radius ? "Радиус" : row == GraphicsRow.Strength ? "Сила затенения" : "Яркость отражений";
-                string readout = row == GraphicsRow.Radius ? Mathf.RoundToInt(value * 100f) + " см" : Mathf.RoundToInt(value * 100f) + " %";
+                string name = row switch
+                {
+                    GraphicsRow.Radius => "Радиус",
+                    GraphicsRow.Strength => "Сила затенения",
+                    GraphicsRow.Exposure => "Экспозиция",
+                    _ => "Яркость отражений"
+                };
+                string readout = row switch
+                {
+                    GraphicsRow.Exposure => value.ToString("+0.0;-0.0;0.0") + " EV",
+                    GraphicsRow.Radius => Mathf.RoundToInt(value * 100f) + " см",
+                    _ => Mathf.RoundToInt(value * 100f) + " %"
+                };
                 Text(r.x + 8f, r.y, r.width - 80f, 22f, name, 14, color, enabled && highlight);
                 Text(r.xMax - 70f, r.y, 70f, 22f, readout, 13, color, false, TextAnchor.MiddleRight);
                 float length = r.width - 8f, filled = length * Mathf.InverseLerp(min, max, value);
                 float y = r.y + r.height * .68f;
                 Block(r.x + 4f, y, length, 3f, StationRow);
                 Block(r.x + 4f, y, filled, 3f, highlight && enabled ? Mint : Rule);
+                if (row == GraphicsRow.Exposure) Block(r.center.x - .5f, y + 3f, 1f, 3f, Muted);
                 Block(r.x + filled + 1f, y - 3f, 6f, 9f, color);
                 return;
             }
-            bool toggle = row == GraphicsRow.Occlusion || row == GraphicsRow.Reflections;
-            bool on = row == GraphicsRow.Occlusion ? RaidGraphicsSettings.AmbientOcclusion : RaidGraphicsSettings.LocalReflections;
+            bool? on = row switch
+            {
+                GraphicsRow.Occlusion => RaidGraphicsSettings.AmbientOcclusion,
+                GraphicsRow.Reflections => RaidGraphicsSettings.LocalReflections,
+                GraphicsRow.WindowCookies => RaidGraphicsSettings.WindowCookies,
+                GraphicsRow.Tonemapping => RaidGraphicsSettings.Tonemapping,
+                _ => null
+            };
             var buttonColor = highlight ? Color.Lerp(StationRow, Mint, .16f) : StationRow;
             float h = Mathf.Min(r.height, 35f);
             Block(r.x, r.y, r.width, h, buttonColor);
             if (highlight) Block(r.x, r.y, 3f, h, Mint);
             string label = row switch
             {
-                GraphicsRow.Occlusion => "Контактное затенение (AO)",
+                GraphicsRow.Occlusion => "Контактные тени (AO)",
                 GraphicsRow.Reflections => "Отражения интерьеров",
+                GraphicsRow.WindowCookies => "Свет от оконных рам",
+                GraphicsRow.Tonemapping => "Тональная компрессия",
                 GraphicsRow.Reset => "По умолчанию",
                 _ => "Назад"
             };
-            Text(r.x + 9f, r.y, r.width - (toggle ? 55f : 18f), h, label, 14, Paper, toggle,
-                toggle ? TextAnchor.MiddleLeft : TextAnchor.MiddleCenter);
-            if (toggle)
-                Text(r.xMax - 53f, r.y, 43f, h, on ? "Вкл" : "Выкл", 13, on ? Mint : Muted, true, TextAnchor.MiddleRight);
+            Text(r.x + 9f, r.y, r.width - (on.HasValue ? 55f : 18f), h, label, 14, Paper, on.HasValue,
+                on.HasValue ? TextAnchor.MiddleLeft : TextAnchor.MiddleCenter);
+            if (on.HasValue)
+                Text(r.xMax - 53f, r.y, 43f, h, on.Value ? "Вкл" : "Выкл", 13, on.Value ? Mint : Muted, true, TextAnchor.MiddleRight);
         }
     }
 }
