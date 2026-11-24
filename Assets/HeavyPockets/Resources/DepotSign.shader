@@ -1,35 +1,41 @@
 Shader "HeavyPockets/DepotSign"
 {
-    Properties { _MainTex ("Font atlas", 2D) = "white" {} }
+    Properties
+    {
+        _MainTex ("Font atlas", 2D) = "white" {}
+        [PerRendererData] _Glow ("Luminous coating", Range(0,2)) = 0
+    }
     SubShader
     {
-        Tags { "Queue" = "Transparent" "RenderType" = "Transparent" }
+        Tags { "Queue" = "Transparent" "RenderType" = "Transparent" "DisableBatching" = "True" }
         ZWrite Off
         ZTest LEqual
         Cull Off
-        Blend SrcAlpha OneMinusSrcAlpha
-        Pass
+        CGPROGRAM
+        #pragma target 3.0
+        #pragma surface surf HarborDiffuse alpha:fade fullforwardshadows vertex:vert
+        #include "HarborSurfaceLighting.cginc"
+
+        sampler2D _MainTex;
+        half _Glow, _HarborDusk;
+        struct Input
         {
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #include "UnityCG.cginc"
-            struct Vertex { float4 position : POSITION; float2 uv : TEXCOORD0; fixed4 color : COLOR; };
-            struct Fragment { float4 position : SV_POSITION; float2 uv : TEXCOORD0; fixed4 color : COLOR; };
-            sampler2D _MainTex;
-            Fragment vert(Vertex input)
-            {
-                Fragment o;
-                o.position = UnityObjectToClipPos(input.position);
-                o.uv = input.uv;
-                o.color = input.color;
-                return o;
-            }
-            fixed4 frag(Fragment i) : SV_Target
-            {
-                return fixed4(i.color.rgb, i.color.a * tex2D(_MainTex, i.uv).a);
-            }
-            ENDCG
+            float2 uv_MainTex;
+            fixed4 color : COLOR;
+        };
+        void vert(inout appdata_full v)
+        {
+            // TextMesh glyphs face local -Z. Keep this frame for oppositely
+            // mounted signs when Unity would otherwise batch them in world space.
+            v.normal = float3(0,0,-1);
         }
+        void surf(Input i, inout SurfaceOutput o)
+        {
+            o.Albedo = i.color.rgb;
+            o.Emission = i.color.rgb * _Glow * (1 + 1.4h * _HarborDusk);
+            o.Alpha = i.color.a * tex2D(_MainTex, i.uv_MainTex).a;
+        }
+        ENDCG
     }
+    Fallback Off
 }

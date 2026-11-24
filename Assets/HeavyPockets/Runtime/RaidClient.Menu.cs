@@ -2,14 +2,35 @@ using UnityEngine;
 
 namespace HeavyPockets
 {
-    internal enum RaidScreen { Play, Menu, Animations, Receipt, Base }
+    internal enum RaidScreen { Play, Menu, Animations, Receipt, Base, Lighting }
     internal enum RaidMenuAction { Resume, Bag, Animations, Base, Join, CancelQueue, Quit, Pouch1, Pouch2, Pouch3, Pouch4,
-        HarborDaylight, HarborPoster, HarborDusk }
+        HarborDaylight, HarborPoster, HarborDusk, Lighting, BackToMenu }
 
     public sealed partial class RaidClient
     {
         private byte basePouchLevel = 1;
-        private bool InPauseMenu => screen == RaidScreen.Menu || screen == RaidScreen.Animations;
+        private bool lightingLook;
+        private bool InPauseMenu => screen == RaidScreen.Menu || screen == RaidScreen.Animations || screen == RaidScreen.Lighting;
+
+        private void CloseMenuViews()
+        {
+            hud?.CloseAnimationPreview();
+            hud?.CloseLightingControls();
+            lightingLook = false;
+        }
+
+        private void UpdateLightingLook()
+        {
+            if (Input.GetMouseButtonDown(1)) lightingLook = !RaidHud.PointerOverLightingControls();
+            if (!lightingLook) return;
+            if (Input.GetMouseButton(1))
+            {
+                ReadMouseLook();
+                if (Time.unscaledTime < nextSend) return;
+            }
+            else lightingLook = false;
+            SendMovement(Vector2.zero);
+        }
 
         private void LeaveAnimationPreview()
         {
@@ -22,6 +43,7 @@ namespace HeavyPockets
         internal void EscapePressed()
         {
             if (disconnected || !HasOwnPose) return;
+            if (screen == RaidScreen.Lighting) { UseMenu(RaidMenuAction.BackToMenu); return; }
             if (screen == RaidScreen.Animations) { LeaveAnimationPreview(); return; }
             if (screen == RaidScreen.Receipt) { UseMenu(RaidMenuAction.Base); return; }
             if (screen == RaidScreen.Menu) { UseMenu(RaidMenuAction.Resume); return; }
@@ -42,7 +64,7 @@ namespace HeavyPockets
         {
             if (action >= RaidMenuAction.HarborDaylight && action <= RaidMenuAction.HarborDusk)
             {
-                if (screen == RaidScreen.Menu)
+                if (screen == RaidScreen.Lighting)
                     RaidScenery.SetEnvironmentStyle((int)action - (int)RaidMenuAction.HarborDaylight);
                 return;
             }
@@ -54,6 +76,18 @@ namespace HeavyPockets
             }
             switch (action)
             {
+                case RaidMenuAction.Lighting when screen == RaidScreen.Menu:
+                    lightingLook = false;
+                    hud.OpenLightingControls();
+                    screen = RaidScreen.Lighting;
+                    break;
+                case RaidMenuAction.BackToMenu when screen == RaidScreen.Lighting:
+                    hud.CloseLightingControls();
+                    if (lightingLook) SendMovement(Vector2.zero);
+                    lightingLook = false;
+                    screen = RaidScreen.Menu;
+                    hud.ResetMenuInput();
+                    break;
                 case RaidMenuAction.Animations when screen == RaidScreen.Menu:
                     hud.OpenAnimationPreview(view != null, LeaveAnimationPreview);
                     screen = RaidScreen.Animations;

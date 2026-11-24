@@ -7,7 +7,7 @@ namespace HeavyPockets
     {
         internal Action<RaidMenuAction> MenuAction;
         private static readonly RaidMenuAction[] PauseButtons = { RaidMenuAction.Resume, RaidMenuAction.Animations,
-            RaidMenuAction.Bag, RaidMenuAction.Quit, RaidMenuAction.HarborDaylight, RaidMenuAction.HarborPoster, RaidMenuAction.HarborDusk };
+            RaidMenuAction.Lighting, RaidMenuAction.Bag, RaidMenuAction.Quit };
         private static readonly RaidMenuAction[] ReceiptButtons = { RaidMenuAction.Base };
         private static readonly RaidMenuAction[] BaseButtons = { RaidMenuAction.Join, RaidMenuAction.Quit,
             RaidMenuAction.Pouch1, RaidMenuAction.Pouch2, RaidMenuAction.Pouch3, RaidMenuAction.Pouch4 };
@@ -69,6 +69,7 @@ namespace HeavyPockets
                 case RaidMenuAction.Resume: return "Продолжить";
                 case RaidMenuAction.Bag: return "Открыть рюкзак";
                 case RaidMenuAction.Animations: return "Анимации";
+                case RaidMenuAction.Lighting: return "Оформление порта";
                 case RaidMenuAction.Base: return "Вернуться на базу";
                 case RaidMenuAction.Join: return state.ChangingQueue ? "Входим…" : "Начать новый рейд";
                 case RaidMenuAction.CancelQueue: return state.ChangingQueue ? "Отменяем…" : "Отменить ожидание";
@@ -79,7 +80,7 @@ namespace HeavyPockets
         private readonly struct StationLayout
         {
             internal readonly float Width, Height, Rail, Margin, HeaderY, HeaderHeight, ActionY;
-            private readonly bool hasPouches, hasStyles;
+            private readonly bool hasPouches;
 
             internal StationLayout(float width, float height, bool receipt, int count)
             {
@@ -90,18 +91,13 @@ namespace HeavyPockets
                 HeaderY = Mathf.Round(Mathf.Clamp(height * .20f, 78f, 150f));
                 HeaderHeight = receipt ? 96f : 76f;
                 hasPouches = count == BaseButtons.Length;
-                hasStyles = count == PauseButtons.Length;
-                int railRows = hasPouches ? 2 : hasStyles ? 4 : count;
-                ActionY = Mathf.Min(HeaderY + HeaderHeight + 55f, height - 108f - railRows * 44f);
+                int railRows = hasPouches ? 2 : count;
+                float footer = count == PauseButtons.Length ? 24f : 108f;
+                ActionY = Mathf.Min(HeaderY + HeaderHeight + 55f, height - footer - railRows * 44f);
             }
 
             internal Rect Button(int index)
             {
-                if (hasStyles && index >= 4)
-                {
-                    float tileWidth = Mathf.Min(169f, (Width - Rail - Margin * 2f - 12f) / 3f);
-                    return new Rect(Rail + Margin + (index - 4) * (tileWidth + 6f), Height - 65f, tileWidth, 39f);
-                }
                 if (!hasPouches || index < 2)
                     return new Rect(Margin, ActionY + index * 44f, Rail - Margin * 2f, 38f);
                 float tile = Mathf.Min(150f, (Width - Rail - Margin * 2f - 10f) * .5f);
@@ -194,12 +190,6 @@ namespace HeavyPockets
                 s.Queued ? "Ждём завершения рейда других игроков." : "Готов к новому рейду.";
             if (status.Length > 0) Text(margin, y + h + 8, layout.Rail - margin - 10, 28, status, 13, Muted);
             if (receipt && s.ExtractedItems.Length > 0) DrawManifest(s.ExtractedItems, layout);
-            if (paused)
-            {
-                Rect first = layout.Button(4), last = layout.Button(6);
-                Block(first.x - 8, first.y - 35, last.xMax - first.x + 16, 82, StationInk);
-                Text(first.x, first.y - 33, last.xMax - first.x, 30, "Оформление порта", 15, Paper, true);
-            }
             if (atBase && !s.Queued)
                 Text(layout.Rail + margin, layout.HeaderY, 310, 35, "Подсумок для рейда", 21, Paper, true);
             for (int i = 0; i < actions.Length; i++)
@@ -212,17 +202,6 @@ namespace HeavyPockets
             bool enabled = Enabled(s, action);
             bool hover = enabled && (menuFocus >= 0 ? menuFocus == index : r.Contains(point));
             bool pressed = enabled && pressedButton == action && r.Contains(point);
-            if (action >= RaidMenuAction.HarborDaylight && action <= RaidMenuAction.HarborDusk)
-            {
-                int style = (int)action - (int)RaidMenuAction.HarborDaylight;
-                bool selected = RaidScenery.EnvironmentStyle == style;
-                Color swatch = style == 0 ? new Color32(157, 199, 205, 255) :
-                    style == 1 ? new Color32(247, 165, 92, 255) : new Color32(158, 158, 217, 255);
-                Block(r.x, r.y, r.width, r.height, selected || hover ? Color.Lerp(StationRow, swatch, pressed ? .33f : .23f) : StationRow);
-                Block(r.x, r.yMax - (selected ? 3f : 1f), r.width, selected ? 3f : 1f, selected || hover ? swatch : Rule);
-                Text(r.x + 8, r.y, r.width - 16, r.height, RaidScenery.EnvironmentStyleName(style), 14, selected ? swatch : Paper, selected);
-                return;
-            }
             bool primary = index == 0 && enabled;
             bool pouch = action >= RaidMenuAction.Pouch1 && action <= RaidMenuAction.Pouch4;
             int level = 1 + (int)action - (int)RaidMenuAction.Pouch1;

@@ -102,7 +102,7 @@ namespace HeavyPockets
             return Shape(parent, PrimitiveType.Cube, name, new Vector3(x, y, z), new Vector3(w, h, d), material).transform;
         }
 
-        private void WallText(Transform parent, string label, Vector3 pos, float yaw, float letterSize, Color color)
+        private void WallText(Transform parent, string label, Vector3 pos, float yaw, float letterSize, Color color, float glow = 0f)
         {
             var holder = Panel(parent, label, pos.x, pos.y, pos.z, yaw);
             var text = holder.gameObject.AddComponent<TextMesh>();
@@ -116,6 +116,12 @@ namespace HeavyPockets
             var renderer = holder.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = signInk;
             renderer.shadowCastingMode = ShadowCastingMode.Off;
+            if (glow > 0f)
+            {
+                var properties = new MaterialPropertyBlock();
+                properties.SetFloat("_Glow", glow);
+                renderer.SetPropertyBlock(properties);
+            }
         }
 
         // All solid architectural surfaces are stationary; pack them by shared material.

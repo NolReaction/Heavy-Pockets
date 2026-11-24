@@ -14,8 +14,29 @@ Shader "HeavyPockets/DepotSurface"
         Tags { "RenderType" = "Opaque" }
         CGPROGRAM
         #pragma target 3.0
-        #pragma surface surf StandardSpecular fullforwardshadows vertex:vert
+        #pragma surface surf HarborSpecular fullforwardshadows vertex:vert
         #pragma multi_compile_instancing
+        #include "UnityPBSLighting.cginc"
+        #include "HarborSurfaceLighting.cginc"
+
+        inline half4 LightingHarborSpecular(SurfaceOutputStandardSpecular s, float3 viewDir, UnityGI gi)
+        {
+            return LightingStandardSpecular(s, viewDir, gi);
+        }
+
+        inline void LightingHarborSpecular_GI(SurfaceOutputStandardSpecular s, UnityGIInput data, inout UnityGI gi)
+        {
+            LightingStandardSpecular_GI(s, data, gi);
+            #if defined(UNITY_PASS_FORWARDBASE)
+            gi.light.color *= HarborKeyTransmission(data.worldPos.xz);
+            #endif
+        }
+
+        inline half4 LightingHarborSpecular_Deferred(SurfaceOutputStandardSpecular s, float3 viewDir,
+            UnityGI gi, out half4 g0, out half4 g1, out half4 g2)
+        {
+            return LightingStandardSpecular_Deferred(s, viewDir, gi, g0, g1, g2);
+        }
 
         sampler2D _Grain;
         half4 _Color, _Finish;
@@ -78,7 +99,7 @@ Shader "HeavyPockets/DepotSurface"
                 float footprint = max(fwidth(phase), .001);
                 float stripe = (1 - smoothstep(.10,.10 + footprint, abs(frac(phase) - .5)))
                              * (1 - smoothstep(.16,.42,footprint));
-                half shade = 1 - smoothstep(-.4,.6,dot(n,normalize(half3(.45,.7,.5))));
+                half shade = 1 - smoothstep(-.4,.6,dot(n,_HarborSunDirection.xyz));
                 o.Albedo = lerp(printColor, ink, .34h * stripe * shade) * (1 + pigment * .055h);
                 o.Smoothness *= .26h;
                 o.Specular *= .18h;

@@ -13,7 +13,8 @@ Shader "HeavyPockets/CoastalGround"
         Cull Off
         CGPROGRAM
         #pragma target 3.0
-        #pragma surface surf Lambert fullforwardshadows addshadow vertex:vert
+        #pragma surface surf HarborDiffuse fullforwardshadows addshadow vertex:vert
+        #include "HarborSurfaceLighting.cginc"
         sampler2D _Grain, _CoastColor, _CoastNormals;
         half _Habitat, _HarborPoster, _HarborDusk;
         half4 _HarborLandColor, _HarborGrassColor;
@@ -35,14 +36,15 @@ Shader "HeavyPockets/CoastalGround"
         {
             float2 uv = i.worldPos.xz;
             half broad = tex2D(_Grain, uv * .012).r;
-            half grain = tex2D(_Grain, uv * .39).r;
-            half middle = tex2D(_Grain, uv * .065).r;
             half grassy = i.color.g;
             half tone = i.color.r;
-            half pattern = broad * .5 + grain * .18 + middle * .32;
+            half pattern = broad;
             half3 color;
             if (_Habitat < .5)
             {
+                half grain = tex2D(_Grain, uv * .39).r;
+                half middle = tex2D(_Grain, uv * .065).r;
+                pattern = broad * .5 + grain * .18 + middle * .32;
                 half coverage = smoothstep(.26, .72, grassy * .58 + broad * .25 + middle * .28);
                 color = lerp(_HarborLandColor.rgb, _HarborGrassColor.rgb, coverage * .94);
                 half slope = i.slope;

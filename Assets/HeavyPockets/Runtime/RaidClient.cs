@@ -342,7 +342,7 @@ namespace HeavyPockets
                     exitSeconds = e.Seconds;
                     break;
                 case RaidEventKind.Result:
-                    hud?.CloseAnimationPreview();
+                    CloseMenuViews();
                     gearMoves.Reset();
                     extracted = true;
                     screen = RaidScreen.Receipt;
@@ -383,7 +383,7 @@ namespace HeavyPockets
 
         private void OnDisconnected(ulong id)
         {
-            hud?.CloseAnimationPreview();
+            CloseMenuViews();
             disconnected = true;
             ClearGear();
             HideInventory(false);
@@ -394,7 +394,7 @@ namespace HeavyPockets
         private void StartRound(uint nextRound)
         {
             if (nextRound == round) return;
-            hud?.CloseAnimationPreview();
+            CloseMenuViews();
             captureOnSpawn = round != 0;
             round = nextRound;
             screen = RaidScreen.Play;
@@ -432,6 +432,7 @@ namespace HeavyPockets
 
         private void Update()
         {
+            scenery?.TickLighting(Time.deltaTime);
             if (Link == null || !HasOwnPose || disconnected)
                 return;
             UpdateViewport();
@@ -458,6 +459,8 @@ namespace HeavyPockets
                             int side = Input.GetKeyDown(KeyCode.RightArrow) ? 1 : Input.GetKeyDown(KeyCode.LeftArrow) ? -1 : 0;
                             hud.AnimationPreviewKey(step, side, enter || Input.GetKeyDown(KeyCode.Space));
                         }
+                        else if (screen == RaidScreen.Lighting)
+                            UpdateLightingLook();
                         else if (enter || step != 0) hud.MenuKey(InventoryState(), step, enter);
                     }
                 }
@@ -753,6 +756,8 @@ namespace HeavyPockets
             if (!focused && view != null)
             {
                 inventoryLooking = false;
+                lightingLook = false;
+                hud?.CloseLightingControls();
                 if (!ScriptedInput)
                 {
                     hud?.CancelDrag();
@@ -770,7 +775,7 @@ namespace HeavyPockets
 
         private void OnDestroy()
         {
-            hud?.CloseAnimationPreview();
+            CloseMenuViews();
             scenery?.Dispose();
             if (Manager != null)
                 Manager.OnClientDisconnectCallback -= OnDisconnected;

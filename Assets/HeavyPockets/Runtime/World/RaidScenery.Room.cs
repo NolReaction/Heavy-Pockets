@@ -138,7 +138,8 @@ namespace HeavyPockets
             Part(area, "Upper signal strip", 0, 4.99f, -.06f, 3.87f, .12f, .19f, exitLight);
             Part(area, "Task light lens", 0, 4.35f, -.34f, .87f, .085f, .17f, sodium);
             foreach (int side in new[] { -1, 1 })
-                WallText(area, "ВЫХОД", new Vector3(0, 4.56f, -.06f + side * .10f), side < 0 ? 0 : 180, .076f, exitLight.color);
+                WallText(area, "ВЫХОД", new Vector3(0, 4.56f, -.06f + side * .10f), side < 0 ? 0 : 180,
+                    .076f, exitLight.color, exitLight.GetFloat("_Glow"));
         }
     }
 }
