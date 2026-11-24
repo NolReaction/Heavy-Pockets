@@ -11,7 +11,8 @@ namespace HeavyPockets
         private void BuildTrainingRange()
         {
             TrainingSurfaces = CoastalSurfaceField.Create(root, Vector2.zero,
-                new Vector2(RaidMap.RoomX * 2f, RaidMap.RoomZ * 2f)).GetComponent<CoastalSurfaceField>();
+                new Vector2(RaidMap.RoomX * 2f, RaidMap.RoomZ * 2f), TrainingLayout.IsPaved).GetComponent<CoastalSurfaceField>();
+            TrainingGrove.Plant(TrainingSurfaces);
             var mint = Surface("Seafoam enamel", Rgb(0x71B3A4));
             var brick = Surface("Terracotta rubber", Rgb(0xB96947), SurfaceFinish.Rubber);
             var sand = Surface("Pale limestone", Rgb(0xE2CC9F), SurfaceFinish.Concrete);
@@ -19,6 +20,7 @@ namespace HeavyPockets
             welcome.mainTexture = Resources.Load<Texture2D>("TrainingDirectory");
             surfaces.Add(welcome);
 
+            var landings = new ChartHouseMeshes(false);
             foreach (RangePart part in TrainingLayout.Parts)
             {
                 Bounds b = part.Box;
@@ -26,14 +28,14 @@ namespace HeavyPockets
                 Material finish = part.Kind == RangeFixture.Board ? teal : part.Kind == RangeFixture.Platform ? sand :
                     part.Kind == RangeFixture.Frame ? mint : part.Kind == RangeFixture.Beam ? amber :
                     part.Kind == RangeFixture.CrawlRoof ? brick : steel;
-                Part(architecture, part.Label ?? part.Kind.ToString(), c.x,c.y,c.z,s.x,s.y,s.z,finish);
                 if (part.Kind == RangeFixture.Platform || part.Kind == RangeFixture.Beam)
                 {
-                    Part(architecture,"Landing surface",c.x,b.max.y-.018f,c.z,s.x+.004f,.036f,s.z+.004f,brick);
-                    Part(architecture,"Takeoff edge",c.x,b.max.y+.001f,b.min.z+.075f,s.x-.12f,.004f,.07f,chalk);
+                    BuildTrainingLanding(landings,b,finish,brick,chalk);
                     if (part.Label != null)
                         WallText(architecture,part.Label,new Vector3(c.x,c.y,b.min.z-.008f),0,.054f,Rgb(0x3B4D48));
+                    continue;
                 }
+                Part(architecture, part.Label ?? part.Kind.ToString(), c.x,c.y,c.z,s.x,s.y,s.z,finish);
                 if (part.Kind != RangeFixture.Board) continue;
                 if (part.Label == "Полигон")
                 {
@@ -56,10 +58,16 @@ namespace HeavyPockets
                 for (int i = -4; i <= 4; i++)
                     RangeMarker(side*71.85f,i*11.2f);
             }
+            landings.Finish(Panel(root,"Parkour landings",0,0,0,0),shellMeshes);
+            BuildPracticePromenade();
             BuildRangeHorizon();
+            BuildExtraction();
+            foreach (var post in TrainingGround.ExitPosts)
+                BuildYardSolid(architecture, post, 0);
             BakeArchitecture();
             BuildSampleLeaf(WorldMechanisms.TrainingDoor,mint,brick);
             BuildSampleLeaf(WorldMechanisms.TrainingGate,mint,brick);
+            InitializeTrainingBuildings();
         }
 
         private void RangeMarker(float x, float z)

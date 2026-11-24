@@ -43,6 +43,7 @@ namespace HeavyPockets
             if (TrainingGround.Active)
             {
                 BuildTrainingRange();
+                BuildCrate();
                 BuildLighting();
                 return;
             }

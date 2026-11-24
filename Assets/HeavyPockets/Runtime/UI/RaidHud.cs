@@ -84,7 +84,7 @@ namespace HeavyPockets
             Panel(x, y, 205, 48);
             PocketMark(x + 13, y + 15, Amber);
             Text(x + 41, y + 3, 158, 25, "Heavy Pockets", 19, Paper, true);
-            Text(x + 42, y + 27, 154, 14, "ГРУЗОВОЙ ПОРТ", 10, Muted, true);
+            Text(x + 42, y + 27, 154, 14, TrainingGround.Active ? "УЧЕБНЫЙ ПОЛИГОН" : "ГРУЗОВОЙ ПОРТ", 10, Muted, true);
         }
 
         private static void PocketMark(float x, float y, Color color)

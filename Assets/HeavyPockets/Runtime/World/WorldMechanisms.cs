@@ -189,8 +189,13 @@ namespace HeavyPockets
             new Vector3(19f, .02f, -7f), new Vector3(1.08f, 2.10f, .045f));
         internal static readonly WorldMechanism TrainingGate = new WorldMechanism(1, true,
             new Vector3(27f, .02f, -7f), new Vector3(3.60f, 3f, .07f));
+        private static readonly Vector3 rangeOffset = TrainingBuildings.Warehouse - ReceivingWarehouseLayout.Origin;
+        private static readonly WorldMechanism rangeWarehouseDoor = new WorldMechanism(2, false, WarehouseDoor.Pivot + rangeOffset, WarehouseDoor.Size);
+        private static readonly WorldMechanism rangeWarehouseGate = new WorldMechanism(3, true, WarehouseGate.Pivot + rangeOffset, WarehouseGate.Size);
+        internal static WorldMechanism PlacedWarehouseDoor => TrainingGround.Active ? rangeWarehouseDoor : WarehouseDoor;
+        internal static WorldMechanism PlacedWarehouseGate => TrainingGround.Active ? rangeWarehouseGate : WarehouseGate;
         private static readonly WorldMechanism[] port = { WarehouseDoor, WarehouseGate };
-        private static readonly WorldMechanism[] training = { TrainingDoor, TrainingGate };
+        private static readonly WorldMechanism[] training = { TrainingDoor, TrainingGate, rangeWarehouseDoor, rangeWarehouseGate };
         private static readonly Dictionary<byte, WorldMechanism> portIds = Index(port);
         private static readonly Dictionary<byte, WorldMechanism> trainingIds = Index(training);
         internal static WorldMechanism[] Active => TrainingGround.Active ? training : port;

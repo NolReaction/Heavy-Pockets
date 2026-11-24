@@ -5,9 +5,11 @@ namespace HeavyPockets
 {
     internal sealed class WarehouseFloorScale : MonoBehaviour
     {
-        internal static Vector3 Position => ReceivingWarehouseLayout.Origin + new Vector3(1.7f, 0f, -.4f);
-        internal static Bounds ColumnBounds => new Bounds(Position + new Vector3(0, .45f, .49f), new Vector3(.085f, .90f, .08f));
-        internal static Bounds HeadBounds => new Bounds(Position + new Vector3(0, .99f, .49f), new Vector3(.38f, .38f, .11f));
+        internal static Vector3 DepotPosition => ReceivingWarehouseLayout.Origin + new Vector3(1.7f, 0f, -.4f);
+        internal static Vector3 Position => TrainingGround.Active ? DepotPosition + (TrainingBuildings.Warehouse - ReceivingWarehouseLayout.Origin) : DepotPosition;
+        // These are authored in the port layout and translated together with the warehouse.
+        internal static Bounds ColumnBounds => new Bounds(DepotPosition + new Vector3(0, .45f, .49f), new Vector3(.085f, .90f, .08f));
+        internal static Bounds HeadBounds => new Bounds(DepotPosition + new Vector3(0, .99f, .49f), new Vector3(.38f, .38f, .11f));
         internal const float Width = 1.10f, Depth = .85f;
         internal const byte RunnerMass = 75, Capacity = 200;
         [SerializeField] private Transform needle;

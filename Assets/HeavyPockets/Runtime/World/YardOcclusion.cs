@@ -70,7 +70,7 @@ namespace HeavyPockets
         {
             if (TrainingGround.Active)
             {
-                foreach (Bounds box in TrainingLayout.Collision)
+                foreach (Bounds box in TrainingLayout.Opaque)
                     if (RaidMap.Intersects(box, origin, segment, 1f, out _)) return true;
                 return false;
             }

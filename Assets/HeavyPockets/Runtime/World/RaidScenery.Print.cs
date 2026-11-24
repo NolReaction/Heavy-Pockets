@@ -7,15 +7,16 @@ namespace HeavyPockets
     {
         private Material printMaterial;
 
-        private void BuildHarborPrint()
+        private void BuildHarborPrint() => BuildHarborPrint(ReceivingWarehouseLayout.Origin);
+
+        private void BuildHarborPrint(Vector3 warehouse)
         {
             var print = Resources.Load<Texture2D>("HarborScreenprint");
             if (print == null) return;
             const float height = 1.68f;
             const float width = height * (16f / 9f);
             // The enamel port poster hangs on the east gable of the railhead shed.
-            Bounds shed = OutdoorLayout.ReceivingWarehouse.Bounds;
-            var position = new Vector3(shed.max.x + .028f, 2.12f, shed.center.z);
+            var position = warehouse + new Vector3(ReceivingWarehouseLayout.Width * .5f + .028f, 2.12f, 0f);
             Shape(root, PrimitiveType.Cube, "Enamel print backing", position,
                 new Vector3(0.054f, height + 0.082f, width + 0.082f), steel);
             printMaterial = new Material(Resources.Load<Shader>("DepotPrint"));

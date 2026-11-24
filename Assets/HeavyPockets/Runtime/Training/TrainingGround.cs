@@ -1,30 +1,42 @@
 using UnityEngine;
+#if UNITY_EDITOR
+using Unity.Netcode;
+#endif
 
 namespace HeavyPockets
 {
-    // An isolated scene with the same metre scale, runner motor and interactables as Depot.
     internal sealed class TrainingGround : MonoBehaviour
     {
         internal const string ScenePath = "Assets/HeavyPockets/TrainingGround.unity";
         internal static bool Active { get; private set; }
-
-        private RaidScenery scenery;
-        private FreightRunnerGait gait;
-        private Camera view;
-        private Vector2 position = new Vector2(1f, -28f);
-        private Vector2 velocity;
-        private RaidLocomotion motion;
-        private MoveButtons previous;
-        private float yaw = -8f, pitch = 7f, boom;
-        private bool nearControl;
+        internal static readonly Vector2 Spawn = new Vector2(1f, -28f);
+        internal static readonly Vector2 Chest = new Vector2(4f, -24f);
+        internal static readonly Vector2 Extraction = new Vector2(62f, 42f);
+        internal static readonly Bounds ChestBounds = new Bounds(new Vector3(Chest.x, .43f, Chest.y),
+            new Vector3(2f * RaidMap.CrateX, .86f, 2f * RaidMap.CrateZ));
+        internal static readonly OutdoorSolid[] ExitPosts =
+        {
+            new OutdoorSolid(OutdoorKind.SignalPost, Extraction.x - 2.6f, Extraction.y, .30f, 4.1f, .30f),
+            new OutdoorSolid(OutdoorKind.SignalPost, Extraction.x + 2.6f, Extraction.y, .30f, 4.1f, .30f)
+        };
+        internal static readonly Bounds[] SiteGeometry =
+        {
+            ChestBounds, ExitPosts[0].Bounds, ExitPosts[1].Bounds,
+            new Bounds(new Vector3(Extraction.x, 4.04f, Extraction.y), new Vector3(5.55f,.31f,.29f)),
+            new Bounds(new Vector3(Extraction.x, 4.49f, Extraction.y-.06f), new Vector3(3.90f,1.13f,.19f))
+        };
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetScene() => Active = false;
 
+#if UNITY_EDITOR
+        private NetworkManager host;
+        private RaidServer server;
+        private RaidClient client;
+
         internal static void Launch()
         {
             Active = true;
-            WorldMechanisms.Reset();
             var root = new GameObject("Учебный полигон");
             PortCollisionWorld.Create(root.transform);
             root.AddComponent<TrainingGround>().Begin();
@@ -32,79 +44,36 @@ namespace HeavyPockets
 
         private void Begin()
         {
-            scenery = new RaidScenery(transform);
-            Transform runner = scenery.InstantiatePlayer(0, new Vector3(position.x, 0, position.y), yaw);
-            runner.gameObject.SetActive(true);
-            gait = runner.GetComponent<FreightRunnerGait>();
-            view = new GameObject("Training camera", typeof(Camera), typeof(AudioListener)).GetComponent<Camera>();
-            view.transform.SetParent(transform, false);
-            view.tag = "MainCamera";
-            view.nearClipPlane = RaidCameraBoom.NearClip;
-            view.farClipPlane = RaidCameraBoom.FarClip;
-            view.fieldOfView = RaidCameraBoom.VerticalFov;
-            UpdateCamera(true);
-            Capture(true);
-        }
-
-        private static void Capture(bool capture)
-        {
-            Cursor.lockState = capture ? CursorLockMode.Locked : CursorLockMode.None;
-            Cursor.visible = !capture;
-        }
-
-        private void Update()
-        {
-            if (Input.GetKeyDown(KeyCode.Escape)) Capture(false);
-            if (Input.GetMouseButtonDown(0) && Application.isFocused) Capture(true);
-            bool control = Application.isFocused && Cursor.lockState == CursorLockMode.Locked;
-            Vector2 direction = Vector2.zero;
-            MoveButtons buttons = MoveButtons.None;
-            if (control)
+            host = gameObject.AddComponent<NetworkManager>();
+            host.NetworkConfig = new NetworkConfig
             {
-                RunnerInput.Look(ref yaw, ref pitch);
-                direction = RunnerInput.WorldDirection(RunnerInput.Keys(), yaw);
-                buttons = RunnerInput.Buttons(Input.GetKeyDown(KeyCode.Space));
-                if (Input.GetKeyDown(KeyCode.E)) WorldMechanisms.TryUseLocal(position, motion);
-            }
-
-            if (buttons != previous) motion.Press(position, velocity, yaw, previous, buttons);
-            previous = buttons;
-            float remaining = Mathf.Min(.15f, Time.deltaTime);
-            while (remaining > 0f)
-            {
-                float step = Mathf.Min(remaining, 1f / 60f);
-                motion.Step(ref position, ref velocity, direction, yaw, buttons, step);
-                remaining -= step;
-            }
-
-            gait.transform.position = new Vector3(position.x, motion.Height, position.y);
-            gait.SetLookHeading(yaw);
-            gait.SetLocomotion(motion.Crouch, motion.Sprinting, motion.Airborne, motion.VerticalSpeed, motion.Sliding);
-            scenery.TrainingSurfaces.BendAt(gait.transform.position);
-            scenery.TickLighting(Time.deltaTime);
-            nearControl = control && WorldMechanisms.Closest(position, motion) != null;
-            UpdateCamera(false);
+                NetworkTransport = gameObject.AddComponent<TrainingTransport>(),
+                EnableSceneManagement = false,
+                ForceSamePrefabs = false,
+                TickRate = 30
+            };
+            if (!host.StartHost()) throw new System.InvalidOperationException("The practice session could not start.");
+            // Register the HUD's receiver before the authority issues the kit and the initial pose.
+            client = gameObject.AddComponent<RaidClient>();
+            client.Initialize(host, null);
+            server = new RaidServer(host);
         }
 
-        private void UpdateCamera(bool snap)
+        private void FixedUpdate()
         {
-            float aspect = Mathf.Clamp(view.aspect, RaidCameraBoom.MinAspect, RaidCameraBoom.MaxAspect);
-            Vector3 eye = RaidCameraBoom.Position(position, yaw, pitch, RaidCameraMode.RightShoulder,
-                aspect, 1f, ref boom, Time.deltaTime, snap, motion.EyeOffset);
-            view.transform.SetPositionAndRotation(eye, Quaternion.Euler(pitch, yaw, 0));
-        }
-
-        private void OnGUI()
-        {
-            if (nearControl) GUI.Box(new Rect(Screen.width * .5f - 18, Screen.height * .58f, 36, 24), "E");
+            if (server == null) return;
+            client.Link.FlushHostCommands();
+            server.Tick(Time.fixedDeltaTime);
         }
 
         private void OnDestroy()
         {
-            scenery?.Dispose();
+            server?.Dispose();
             WorldMechanisms.Reset();
             Active = false;
-            Capture(false);
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
         }
+#endif
     }
 }

@@ -9,7 +9,11 @@ namespace HeavyPockets
         private Material shorePlants;
         private static readonly int Walker = Shader.PropertyToID("_Walker");
 
-        internal void BendGroundcover(Vector3 feet) => shorePlants.SetVector(Walker, feet);
+        internal void BendGroundcover(Vector3 feet)
+        {
+            if (TrainingSurfaces != null) TrainingSurfaces.BendAt(feet);
+            else shorePlants.SetVector(Walker, feet);
+        }
 
         private void BuildCoast()
         {

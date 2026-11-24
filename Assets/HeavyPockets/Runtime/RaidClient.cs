@@ -196,7 +196,7 @@ namespace HeavyPockets
             hud.MenuAction = UseMenu;
             hud.MoveGear = RequestGearMove;
             hud.SelectGear = SelectEquipment;
-            if (Application.isBatchMode || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
+            if ((Application.isBatchMode && !TrainingGround.Active) || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
                 return;
             var stage = new GameObject("Freight harbor");
             stage.transform.SetParent(transform, false);
@@ -287,7 +287,7 @@ namespace HeavyPockets
                         if (!HasOwnPose && view != null)
                         {
                             yaw = e.Yaw;
-                            pitch = OwnPosition.y < 0f ? 2f : 24f;
+                            pitch = TrainingGround.Active ? 7f : OwnPosition.y < 0f ? 2f : 24f;
                             displayPosition = OwnPosition;
                             ownModel = scenery.InstantiatePlayer(e.Actor, new Vector3(e.Position.x, e.Motion.Height, e.Position.y), yaw);
                             ownGait = ownModel.GetComponent<FreightRunnerGait>();
@@ -405,7 +405,7 @@ namespace HeavyPockets
         {
             if (nextRound == round) return;
             CloseMenuViews();
-            captureOnSpawn = round != 0;
+            captureOnSpawn = round != 0 || TrainingGround.Active;
             round = nextRound;
             screen = RaidScreen.Play;
             bagFromMenu = closeRequested = queued = changingQueue = extracted = false;

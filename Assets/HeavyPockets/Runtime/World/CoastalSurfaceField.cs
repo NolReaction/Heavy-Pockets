@@ -12,19 +12,22 @@ namespace HeavyPockets
     {
         private readonly List<Mesh> ownedMeshes = new List<Mesh>();
         private Material blades;
+        internal Material GrovePaint { private get; set; }
 
-        internal static GameObject Create(Transform parent, Vector2 center, Vector2 size)
+        internal static GameObject Create(Transform parent, Vector2 center, Vector2 size,
+            Func<Vector2, float, bool> excludeGrass = null)
         {
             var field = new GameObject("Coastal surface garden").AddComponent<CoastalSurfaceField>();
             field.transform.SetParent(parent, false);
             field.transform.localPosition = new Vector3(center.x, 0, center.y);
-            field.Build(size);
+            field.Build(size, center, excludeGrass);
             return field.gameObject;
         }
 
         internal void BendAt(Vector3 feet)
         {
             if (blades != null) blades.SetVector("_CoastalFeet", new Vector4(feet.x, feet.y, feet.z, 1f));
+            if (GrovePaint != null) GrovePaint.SetVector("_CoastalFeet", new Vector4(feet.x, feet.y, feet.z, 1f));
         }
 
         private static float Blend(float a, float b, float value) =>
@@ -47,7 +50,7 @@ namespace HeavyPockets
                 Mathf.Lerp(dry, .84f, east), meadow * (1f - east));
         }
 
-        private void Build(Vector2 size)
+        private void Build(Vector2 size, Vector2 center, Func<Vector2, float, bool> excludeGrass)
         {
             int nx = Mathf.Max(1, Mathf.CeilToInt(size.x / 1.35f));
             int nz = Mathf.Max(1, Mathf.CeilToInt(size.y / 1.35f));
@@ -83,7 +86,7 @@ namespace HeavyPockets
                     Vector2 span = new Vector2(size.x / cx, size.y / cz);
                     Vector2 origin = new Vector2(-size.x * .5f + i * span.x, -size.y * .5f + j * span.y);
                     if ((origin.x / size.x) * 144f > 10f) continue;
-                    BuildGrassTile(origin, span, size, random);
+                    BuildGrassTile(origin, span, size, center, random, excludeGrass);
                 }
         }
 
@@ -109,7 +112,8 @@ namespace HeavyPockets
         }
         private static float Sample(System.Random r) => (float)r.NextDouble();
 
-        private void BuildGrassTile(Vector2 origin, Vector2 span, Vector2 fieldSize, System.Random rng)
+        private void BuildGrassTile(Vector2 origin, Vector2 span, Vector2 fieldSize, Vector2 center,
+            System.Random rng, Func<Vector2, float, bool> excludeGrass)
         {
             var grass = new GrassMesh();
             int count = Mathf.CeilToInt(span.x * span.y * 3.4f);
@@ -123,31 +127,48 @@ namespace HeavyPockets
                 float patch = Mathf.PerlinNoise(x * .21f + 12, z * .21f + 31);
                 if (Sample(rng) > cover * Mathf.Lerp(.12f, .96f, Blend(.21f, .70f, patch))) continue;
                 float longGrass = Mathf.Max(layers.a, layers.b * .85f);
-                float h = Mathf.Lerp(.12f, .30f, longGrass) * Mathf.Lerp(.64f, 1.28f, Sample(rng));
+                float h = Mathf.Lerp(.105f, .36f, longGrass) * Mathf.Lerp(.64f, 1.28f, Sample(rng));
+                // Include the furthest tip plus the space it can bend under a nearby foot.
+                if (excludeGrass != null && excludeGrass(center + field, h * 1.52f + .28f)) continue;
                 Color tip = Color.Lerp(new Color(.575f, .605f, .413f), new Color(.50f, .56f, .356f), layers.a);
                 tip = Color.Lerp(tip, new Color(.68f, .625f, .44f), layers.b) * Mathf.Lerp(.89f, 1.045f, Sample(rng));
                 Color low = Color.Lerp(tip, new Color(.31f, .365f, .255f), .60f);
-                int bladeCount = 4 + (int)(longGrass * 2.5f);
+                int bladeCount = 4 + (int)(longGrass * 3.5f);
                 for (int n = 0; n < bladeCount; n++)
                 {
                     float angle = Sample(rng) * Mathf.PI * 2;
                     var direction = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle));
-                    var spread = new Vector3(-direction.z, 0, direction.x) * Mathf.Lerp(.007f, .0145f, Sample(rng));
+                    var spread = new Vector3(-direction.z, 0, direction.x) * Mathf.Lerp(.009f, .023f, Sample(rng));
                     Vector3 foot = new Vector3(p.x, -.008f, p.y) + direction * h * Sample(rng) * .7f;
                     Vector3 end = foot + Vector3.up * h * Mathf.Lerp(.74f, 1.15f, Sample(rng)) + direction * h * Mathf.Lerp(.31f, .81f, Sample(rng));
                     grass.Blade(foot, end, spread, low, tip);
                 }
-                if (layers.a > .65f && layers.b < .5f && patch > .44f && Sample(rng) < .047f)
+                if (longGrass > .51f && patch > .49f && Sample(rng) < .18f)
                 {
-                    // A small group of pale flowerheads, at runner-ankle height.
-                    Vector3 foot = new Vector3(p.x, 0, p.y), crown = foot + new Vector3(.045f, h * 1.35f, .036f);
-                    grass.Blade(foot, crown, new Vector3(.005f, 0, 0), low, tip);
-                    for (int petal = 0; petal < 4; petal++)
+                    // Soft oat panicles in the dry plots; small flowering yarrow and
+                    // broad lance-shaped leaves at the feet of the taller meadow grasses.
+                    bool flowers=layers.a>.50f && layers.b<.50f;
+                    Vector3 foot = new Vector3(p.x,0,p.y);
+                    Vector3 crown = foot + new Vector3(.049f,h*(flowers ? 1.12f : 1.42f),.036f);
+                    grass.Blade(foot,crown,new Vector3(.005f,0,.003f),low,tip);
+                    Color head = flowers ? new Color(.89f,.86f,.67f) : new Color(.77f,.68f,.47f);
+                    for (int n=0;n<5;n++)
                     {
-                        float angle = petal * 1.5708f;
-                        var radial = new Vector3(Mathf.Cos(angle), .25f, Mathf.Sin(angle));
-                        grass.Blade(crown, crown + radial * .036f, new Vector3(-radial.z, 0, radial.x) * .011f,
-                            new Color(.84f, .72f, .43f), new Color(.94f, .90f, .74f));
+                        float angle=n*2.39996f+p.x;
+                        Vector3 dir=new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle));
+                        Vector3 side=new Vector3(-dir.z,0,dir.x);
+                        if(flowers)
+                        {
+                            grass.Blade(foot,foot+dir*h*.53f+Vector3.up*h*.31f,side*.024f,low,tip);
+                            Vector3 bud=crown+dir*.035f+Vector3.up*(.008f*(n%2));
+                            grass.Blade(crown,bud,side*.009f,tip,head);
+                            grass.Blade(bud,bud+dir*.028f+Vector3.up*.016f,side*.018f,head,head*1.08f);
+                        }
+                        else
+                        {
+                            Vector3 node=crown-Vector3.up*.11f+Vector3.up*(n*.018f);
+                            grass.Blade(node,node+dir*(.036f+.006f*(4-n))+Vector3.up*.056f,side*.007f,tip,head);
+                        }
                     }
                 }
             }

@@ -96,7 +96,7 @@ namespace HeavyPockets
 
         private static Bounds PaddedCargoCase()
         {
-            Bounds box = RaidMap.CargoCase;
+            Bounds box = RaidMap.DepotCargo;
             box.Expand(2f * Clearance);
             return box;
         }

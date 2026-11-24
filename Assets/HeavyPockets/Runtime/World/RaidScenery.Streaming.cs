@@ -10,7 +10,9 @@ namespace HeavyPockets
         private const float EnterDistance = 32f, LeaveDistance = 44f;
         private sealed class PortCell
         {
-            internal PortCellAsset Horizon;
+            internal Vector2Int Key;
+            internal Vector3 Offset;
+            internal Vector2 Extents;
             internal TileRequest Near;
             internal GameObject Proxy, Detail;
             internal string ResourcePath;
@@ -80,38 +82,41 @@ namespace HeavyPockets
             Vector2Int houseKey = PortCellAsset.Key(ChartHouseLayout.Origin.x, ChartHouseLayout.Origin.z);
             foreach (PortCellAsset distant in catalog.HorizonCells)
             {
-                var cell = new PortCell { Horizon = distant, House = distant.Cell == houseKey,
+                var cell = new PortCell { Key = distant.Cell, House = distant.Cell == houseKey,
                     ResourcePath = PortCellAsset.TileName(distant.Cell) };
                 cell.Proxy = InstantiateCell(distant, "Port silhouette");
-                if (cell.House) BuildChartHouseProxy(cell.Proxy.transform);
+                if (cell.House) BuildChartHouseProxy(cell.Proxy.transform,ChartHouseLayout.Origin);
                 var warehouse = ReceivingWarehouseLayout.Origin;
                 if (distant.Cell == PortCellAsset.Key(warehouse.x, warehouse.z))
-                    MountDistantWarehouseLeaves(cell.Proxy.transform);
+                    MountDistantWarehouseLeaves(cell.Proxy.transform, Vector3.zero);
                 portCells.Add(cell);
             }
             TickStreaming(Vector2.zero);
         }
 
-        private void MountDistantWarehouseLeaves(Transform parent)
+        private void MountDistantWarehouseLeaves(Transform parent, Vector3 parentOrigin)
         {
-            var hinge = ReceivingWarehouseLayout.DoorHinge;
+            var mechanism = WorldMechanisms.PlacedWarehouseDoor;
+            var hinge = mechanism.Pivot - parentOrigin;
             var leaf = Panel(parent, "Distant personnel door", hinge.x, hinge.y, hinge.z, 0);
             float w = ReceivingWarehouseLayout.DoorWidth, h = ReceivingWarehouseLayout.DoorHeight;
             Part(leaf, "Steel", w*.5f, h*.5f, 0, w, h, ReceivingWarehouseLayout.DoorThickness, steel);
-            WorldMechanisms.WarehouseDoor.Bind(leaf);
+            mechanism.Bind(leaf);
 
-            var bottom = ReceivingWarehouseLayout.GateBottom;
+            var gate = WorldMechanisms.PlacedWarehouseGate;
+            var bottom = gate.Pivot - parentOrigin;
             var shutter = Panel(parent, "Distant loading shutter", bottom.x, bottom.y, bottom.z, 0);
             h = ReceivingWarehouseLayout.GateHeight;
             Part(shutter, "Curtain", 0, h*.5f, 0, ReceivingWarehouseLayout.GateWidth, h,
                 ReceivingWarehouseLayout.GateThickness, teal);
-            WorldMechanisms.WarehouseGate.Bind(shutter);
+            gate.Bind(shutter);
         }
 
-        private GameObject InstantiateCell(PortCellAsset asset, string label)
+        private GameObject InstantiateCell(PortCellAsset asset, string label, Vector3 offset = default)
         {
             var tile = new GameObject($"{label} [{asset.Cell.x},{asset.Cell.y}]");
             tile.transform.SetParent(root, false);
+            tile.transform.localPosition = offset;
             foreach (var surface in asset.Surfaces)
             {
                 var part = new GameObject(surface.Material, typeof(MeshFilter), typeof(MeshRenderer));
@@ -134,15 +139,26 @@ namespace HeavyPockets
                     instance.localScale *= prop.Scale;
                     if (instance.TryGetComponent<WarehouseFloorScale>(out var scale)) FloorScale = scale;
                     var door = instance.Find(ReceivingWarehouseLayout.DoorLeafName);
-                    if (door != null) WorldMechanisms.WarehouseDoor.Bind(door);
+                    if (door != null)
+                    {
+                        WorldMechanisms.PlacedWarehouseDoor.Bind(door);
+                        if (TrainingGround.Active) BuildWarehouseFloorFinish(instance);
+                    }
                     var gate = instance.Find(ReceivingWarehouseLayout.GateLeafName);
-                    if (gate != null) WorldMechanisms.WarehouseGate.Bind(gate);
+                    if (gate != null) WorldMechanisms.PlacedWarehouseGate.Bind(gate);
                 }
             return tile;
         }
 
-        private static float DistanceSquared(Vector2 point, Vector2Int key)
+        private static float DistanceSquared(Vector2 point, PortCell cell)
         {
+            if (cell.Extents != Vector2.zero)
+            {
+                float dx = Mathf.Max(0,Mathf.Abs(point.x-cell.Offset.x)-cell.Extents.x);
+                float dz = Mathf.Max(0,Mathf.Abs(point.y-cell.Offset.z)-cell.Extents.y);
+                return dx*dx + dz*dz;
+            }
+            var key = cell.Key;
             float x = Mathf.Max(0f, Mathf.Max(key.x * PortCellAsset.Width - point.x, point.x - (key.x + 1) * PortCellAsset.Width));
             float z = Mathf.Max(0f, Mathf.Max(key.y * PortCellAsset.Width - point.y, point.y - (key.y + 1) * PortCellAsset.Width));
             return x*x + z*z;
@@ -153,7 +169,7 @@ namespace HeavyPockets
             if (StreamingSettled && (playerXZ - lastStreamingPoint).sqrMagnitude < 1f) return;
             lastStreamingPoint = playerXZ;
             StreamingSettled = false;
-            if (loadingCell != null && DistanceSquared(playerXZ, loadingCell.Horizon.Cell) > LeaveDistance * LeaveDistance)
+            if (loadingCell != null && DistanceSquared(playerXZ, loadingCell) > LeaveDistance * LeaveDistance)
                 CancelTileLoad();
             if (loadingCell != null && loadingCell.Near.Request.isDone &&
                 (!loadingCell.House || HarborInteriorMaterials.Ready))
@@ -169,10 +185,11 @@ namespace HeavyPockets
                 else
                 {
                     loadingCell = null;
-                    cell.Detail = InstantiateCell(asset, "Port cell");
+                    cell.Detail = InstantiateCell(asset, "Port cell", cell.Offset);
                     if (cell.House)
                     {
-                        try { BuildChartHouse(cell.Detail.transform, asset.ChartHouseShell, asset.ChartHouseDetail); }
+                        try { BuildChartHouse(cell.Detail.transform, asset.ChartHouseShell, asset.ChartHouseDetail,
+                            cell.Extents == Vector2.zero ? ChartHouseLayout.Origin : Vector3.zero); }
                         catch (System.Exception ex)
                         {
                             // Keep the distant hull and allow the remaining map to stream.
@@ -197,7 +214,7 @@ namespace HeavyPockets
             float nearest = EnterDistance * EnterDistance;
             foreach (var cell in portCells)
             {
-                float distance = DistanceSquared(playerXZ, cell.Horizon.Cell);
+                float distance = DistanceSquared(playerXZ, cell);
                 if (cell.Detail != null && distance > LeaveDistance * LeaveDistance)
                 {
                     cell.Proxy.SetActive(true);

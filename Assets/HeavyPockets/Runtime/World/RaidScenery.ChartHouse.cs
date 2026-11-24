@@ -11,19 +11,18 @@ namespace HeavyPockets
         private static readonly Color32 Navy = new Color32(60,77,80,255);
         private static readonly Color32 Bone = new Color32(239,227,195,255);
 
-        private Transform ChartHouseRoot(Transform parent, string name, out ChartHouseAssets owner)
+        private Transform ChartHouseRoot(Transform parent, string name, Vector3 origin, out ChartHouseAssets owner)
         {
             var site = new GameObject(name).transform;
             site.SetParent(parent,false);
-            site.position = root.TransformPoint(ChartHouseLayout.Origin);
-            site.rotation = root.rotation;
+            site.localPosition = origin;
             owner = site.gameObject.AddComponent<ChartHouseAssets>();
             return site;
         }
 
-        private void BuildChartHouseProxy(Transform parent)
+        private void BuildChartHouseProxy(Transform parent, Vector3 origin)
         {
-            var site = ChartHouseRoot(parent,"Штурманская • вдали",out var owner);
+            var site = ChartHouseRoot(parent,"Штурманская • вдали",origin,out var owner);
             var shell = new ChartHouseMeshes(false);
             foreach (var wall in ChartHouseLayout.Walls) shell.Box(oxide,wall);
             shell.Box(black,ChartHouseLayout.Roof);
@@ -33,11 +32,11 @@ namespace HeavyPockets
             shell.FinishProxy(site,owner);
         }
 
-        private void BuildChartHouse(Transform parent,Mesh[] shell,Mesh[] detail)
+        private void BuildChartHouse(Transform parent,Mesh[] shell,Mesh[] detail,Vector3 origin)
         {
             if(shell == null || shell.Length == 0 || detail == null || detail.Length == 0)
                 throw new System.InvalidOperationException("The chart house tile has no baked interior meshes.");
-            var site = ChartHouseRoot(parent,"Штурманская № 04",out var owner);
+            var site = ChartHouseRoot(parent,"Штурманская № 04",origin,out var owner);
             var f = owner.Finishes = new HarborInteriorMaterials();
             owner.BorrowedMeshes=true;
             MountChartHouse(site,shell,owner);
@@ -62,6 +61,7 @@ namespace HeavyPockets
             ChartHouseLight(site,"Отражение света от штукатурки",LightType.Point,P(2f,2.15f,.7f),Vector3.zero,
                 new Color32(198,213,225,255),.76f,5.9f,0f,false);
             chartHouseReflection = f.InstallReflection(site);
+            if (TrainingGround.Active) BuildChartFloorFinish(site);
         }
 
         private static List<Renderer> MountChartHouse(Transform parent,Mesh[] meshes,ChartHouseAssets owner)

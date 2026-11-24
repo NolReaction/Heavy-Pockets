@@ -60,7 +60,7 @@ namespace HeavyPockets
 
         public RaidServer(NetworkManager net, string auditPath = null, Func<ulong, bool> mayPlay = null, bool pairedSpawn = false)
         {
-            if (!net.IsServer || net.IsClient)
+            if (!net.IsServer || (net.IsClient && !TrainingGround.Active))
                 throw new InvalidOperationException("RaidServer requires a running dedicated server");
             this.net = net;
             this.mayPlay = mayPlay;
@@ -76,7 +76,7 @@ namespace HeavyPockets
 
         internal void ActivatePlayer(ulong id)
         {
-            if (id == NetworkManager.ServerClientId || players.ContainsKey(id) ||
+            if ((id == NetworkManager.ServerClientId && !net.IsHost) || players.ContainsKey(id) ||
                 !net.ConnectedClients.ContainsKey(id) || (mayPlay != null && !mayPlay(id)))
                 return;
             if (players.Count >= 4)
@@ -107,6 +107,7 @@ namespace HeavyPockets
             int slot = nextSlot++;
             bool first = slot % 2 == 0;
             var player = new Player { Id = id, Round = round, Position = RaidMap.Spawn(slot), Yaw = first ? 51f : -109f };
+            if (TrainingGround.Active) player.Yaw = -8f;
             if (pairedSpawn)
             {
                 // Look across the open lane south of the three practice crates.
@@ -191,7 +192,7 @@ namespace HeavyPockets
                 return;
             if (player.IngressCredits < 1f)
             {
-                net.DisconnectClient(sender);
+                if (!net.IsHost || sender != net.LocalClientId) net.DisconnectClient(sender);
                 return;
             }
             // Charge every incoming command before allocating or writing to the audit,

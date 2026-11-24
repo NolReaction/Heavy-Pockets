@@ -1,4 +1,5 @@
 using System.Text;
+using System.Collections.Generic;
 using System;
 using System.IO;
 using Unity.Collections;
@@ -364,10 +365,12 @@ namespace HeavyPockets
         private uint transferSequence;
         private readonly NetworkManager net;
         private readonly RaidAudit audit;
+        private readonly Queue<byte[]> hostCommands;
 
         public RaidClientLink(NetworkManager net, string auditPath = null)
         {
             this.net = net;
+            if (net.IsHost) hostCommands = new Queue<byte[]>();
             audit = RaidAudit.Open(auditPath);
             net.CustomMessagingManager.RegisterNamedMessageHandler(RaidWire.Events, OnEvent);
         }
@@ -489,8 +492,17 @@ namespace HeavyPockets
 
         private void Send(byte[] bytes)
         {
-            if (net != null && net.IsConnectedClient)
-                RaidWire.Send(net, NetworkManager.ServerClientId, RaidWire.Commands, bytes, audit);
+            if (net == null || !net.IsConnectedClient) return;
+            // A host dispatches its own named messages synchronously. Finish the UI's drag
+            // or gear operation before its acknowledgement can arrive from the simulation.
+            if (hostCommands != null) hostCommands.Enqueue(bytes);
+            else RaidWire.Send(net, NetworkManager.ServerClientId, RaidWire.Commands, bytes, audit);
+        }
+
+        internal void FlushHostCommands()
+        {
+            for (int i = hostCommands.Count; i > 0; i--)
+                RaidWire.Send(net, NetworkManager.ServerClientId, RaidWire.Commands, hostCommands.Dequeue(), audit);
         }
 
         public void Dispose()

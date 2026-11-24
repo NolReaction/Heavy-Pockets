@@ -8,8 +8,10 @@ namespace HeavyPockets
     // Geometry and authoritative movement use the same dimensions.
     public static class RaidMap
     {
-        public static readonly Vector2 Crate = new Vector2(0f, 0.8f);
-        public static readonly Vector2 Exit = new Vector2(47f, 35f);
+        private static readonly Vector2 DepotCrate = new Vector2(0f, .8f);
+        private static readonly Vector2 DepotExit = new Vector2(47f, 35f);
+        public static Vector2 Crate => TrainingGround.Active ? TrainingGround.Chest : DepotCrate;
+        public static Vector2 Exit => TrainingGround.Active ? TrainingGround.Extraction : DepotExit;
         public const float RoomX = 72f;
         public const float RoomZ = 56f;
         public const float WallX = 2f;
@@ -29,7 +31,8 @@ namespace HeavyPockets
         private static readonly Bounds WearStrip = Box(0, .35f, 0, WallX, .45f, .16f);
         private static readonly Bounds FaceDetails = Box(0, .44f, 0, 1.98f, 2.245f, .17f);
         private static readonly Bounds Placard = Box(0, 1.39f, 0, .83f, 1.81f, .196f);
-        internal static readonly Bounds CargoCase = Box(Crate.x, 0, Crate.y, CrateX, .86f, CrateZ);
+        internal static readonly Bounds DepotCargo = Box(DepotCrate.x, 0, DepotCrate.y, CrateX, .86f, CrateZ);
+        internal static Bounds CargoCase => TrainingGround.Active ? TrainingGround.ChestBounds : DepotCargo;
         private static readonly Bounds[] DepotBoxes = BuildCollisionBoxes();
         internal static Bounds[] CollisionBoxes => TrainingGround.Active ? TrainingLayout.Collision : DepotBoxes;
 
@@ -51,7 +54,7 @@ namespace HeavyPockets
             boxes[2] = WearStrip;
             boxes[3] = FaceDetails;
             boxes[4] = Placard;
-            boxes[5] = CargoCase;
+            boxes[5] = DepotCargo;
             Array.Copy(OutdoorLayout.Occluders, 0, boxes, 6, OutdoorLayout.Occluders.Length);
             // Transparent windows stop the body and physics props but transmit sight.
             Array.Copy(glazing, 0, boxes, 6 + OutdoorLayout.Occluders.Length, glazing.Length);
@@ -91,6 +94,7 @@ namespace HeavyPockets
 
         public static Vector2 Spawn(int slot)
         {
+            if (TrainingGround.Active) return TrainingGround.Spawn;
             return slot % 2 == 0 ? new Vector2(-4f, -9f) : new Vector2(1.15f, 1.25f);
         }
 

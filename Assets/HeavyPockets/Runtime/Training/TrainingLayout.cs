@@ -20,8 +20,57 @@ namespace HeavyPockets
 
     internal static class TrainingLayout
     {
+        internal static readonly (string Material, string Label)[] FloorSamples = {
+            ("Limestone flags", "Плиты"), ("Kiln brick herringbone", "Клинкер"),
+            ("Harbour terrazzo", "Терраццо"), ("Octagon and dot", "Керамика"), ("Oiled oak", "Дуб")
+        };
+        internal const float SampleWidth = 2.15f;
+        internal const float SampleSouth = -24.25f, SampleNorth = -20.65f;
+        internal static float SampleLeft(int index) => 11f + index * SampleWidth;
+        internal static readonly (Rect Area, string Material)[] Paving = {
+            (Rect.MinMaxRect(1.85f,-26.65f,44.80f,SampleSouth), "Limestone flags"),
+            (Rect.MinMaxRect(42.40f,SampleSouth,44.80f,1.55f), "Kiln brick herringbone"),
+            (Rect.MinMaxRect(42.40f,1.55f,49.70f,3.95f), "Limestone flags"),
+            (Rect.MinMaxRect(47.30f,3.95f,49.70f,22.45f), "Limestone flags"),
+            (Rect.MinMaxRect(41.25f,22.45f,56.50f,24.49f), "Kiln brick herringbone")
+        };
         internal static readonly RangePart[] Parts = Layout();
-        internal static readonly Bounds[] Collision = System.Array.ConvertAll(Parts, p => p.Box);
+        internal static readonly Bounds[] Opaque = BuildOpaque();
+        internal static readonly Bounds[] Collision = WithGlazing();
+
+        internal static bool IsPaved(Vector2 p, float margin)
+        {
+            Rect clearance = Rect.MinMaxRect(p.x-margin,p.y-margin,p.x+margin,p.y+margin);
+            foreach (var run in Paving)
+                if (clearance.Overlaps(run.Area)) return true;
+            if (clearance.Overlaps(Rect.MinMaxRect(SampleLeft(0),SampleSouth,SampleLeft(FloorSamples.Length),SampleNorth))) return true;
+            bool OverFootprint(Vector3 center, float halfWidth, float halfDepth)
+                => clearance.Overlaps(Rect.MinMaxRect(center.x-halfWidth,center.z-halfDepth,center.x+halfWidth,center.z+halfDepth));
+            var chest = TrainingGround.ChestBounds;
+            if (OverFootprint(chest.center,chest.extents.x,chest.extents.z) ||
+                OverFootprint(TrainingBuildings.ChartHouse,6f,4f) || OverFootprint(TrainingBuildings.Warehouse,7f,4.5f)) return true;
+            foreach (var part in Parts)
+                if (part.Kind == RangeFixture.Post && OverFootprint(part.Box.center,.16f,.16f)) return true;
+            return false;
+        }
+
+        private static Bounds[] BuildOpaque()
+        {
+            var boxes = new List<Bounds>();
+            foreach (var part in Parts) boxes.Add(part.Box);
+            boxes.AddRange(TrainingGrove.Trunks);
+            boxes.AddRange(TrainingGround.SiteGeometry);
+            TrainingBuildings.AddTranslated(boxes, ChartHouseLayout.Collision, TrainingBuildings.ChartHouse - ChartHouseLayout.Origin);
+            TrainingBuildings.AddTranslated(boxes, ReceivingWarehouseLayout.Collision, TrainingBuildings.Warehouse - ReceivingWarehouseLayout.Origin);
+            return boxes.ToArray();
+        }
+
+        private static Bounds[] WithGlazing()
+        {
+            var boxes = new List<Bounds>(Opaque);
+            TrainingBuildings.AddTranslated(boxes, ChartHouseLayout.Glazing, TrainingBuildings.ChartHouse - ChartHouseLayout.Origin);
+            return boxes.ToArray();
+        }
 
         private static RangePart[] Layout()
         {
@@ -68,6 +117,8 @@ namespace HeavyPockets
             Sign(-32,37,1.72f,.34f,.58f, "Сухая трава");
             Sign(23,-9.6f,1.55f,.34f,.69f, "Механизмы");
             Sign(21,5f,1.5f,.34f,.69f, "Паркур");
+            for (int i = 0; i < FloorSamples.Length; i++)
+                Sign(SampleLeft(i) + SampleWidth * .5f, -20.48f, 1.72f, .32f, .28f, FloorSamples[i].Label);
             return parts.ToArray();
         }
     }

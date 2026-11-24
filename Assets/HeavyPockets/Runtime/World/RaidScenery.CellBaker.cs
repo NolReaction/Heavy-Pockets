@@ -118,6 +118,7 @@ namespace HeavyPockets
                 }
                 EditorUtility.SetDirty(catalog);
                 AssetDatabase.SaveAssets();
+                BakeBuildingKits();
                 foreach (string guid in AssetDatabase.FindAssets("t:PortCellAsset", new[] {CellOutput+"PortCells"}))
                 {
                     string path = AssetDatabase.GUIDToAssetPath(guid);

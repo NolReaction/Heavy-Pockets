@@ -235,13 +235,15 @@ namespace HeavyPockets
             return renderer;
         }
 
-        internal void FinishProxy(Transform parent, ChartHouseAssets owner)
+        internal void FinishProxy(Transform parent, ChartHouseAssets owner) => Finish(parent, owner.Meshes);
+
+        internal void Finish(Transform parent, List<Mesh> ownedMeshes)
         {
             foreach (var item in batches)
             {
                 var mesh=MakeMesh(item.Value,item.Key.name);
                 mesh.UploadMeshData(true);
-                owner.Meshes.Add(mesh);
+                ownedMeshes.Add(mesh);
                 Mount(parent,mesh,item.Key,true);
             }
             batches.Clear();

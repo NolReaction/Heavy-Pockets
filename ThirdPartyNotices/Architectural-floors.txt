@@ -1,0 +1,8 @@
+Oiled oak uses the Wood Floor scan by Dimitrios Savva (Poly Haven).
+Source: https://polyhaven.com/a/wood_floor
+License: CC0 1.0 Universal, https://polyhaven.com/license
+The albedo was graded for the chart house. The detail texture combines
+tangent-space normal X/Y, ambient occlusion and smoothness.
+
+The limestone flags, kiln brick herringbone, harbour terrazzo and
+octagon-and-dot tile materials are original Heavy Pockets artwork.
