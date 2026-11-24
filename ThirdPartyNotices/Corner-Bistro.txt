@@ -1,0 +1,23 @@
+Corner Bistro
+
+Amazon Lumberyard, Amazon Lumberyard Bistro, Open Research Content Archive (ORCA),
+July 2017. https://developer.nvidia.com/orca/amazon-lumberyard-bistro
+Licensed under Creative Commons Attribution 4.0 International.
+https://creativecommons.org/licenses/by/4.0/
+
+Lumberyard Bistro Reference Scene, converted by Logan Preshaw (WickedInsignia).
+https://github.com/godotengine/godot/issues/74965
+Bistro-Demo-Tweaked, by John James Gutib (Jamsers).
+https://github.com/Jamsers/Bistro-Demo-Tweaked/tree/6844fe7fc07be37b768d5fbc02c0602f2817b259
+Both sets of scene assets are licensed under CC BY 4.0.
+https://github.com/Jamsers/Bistro-Demo-Tweaked/blob/6844fe7fc07be37b768d5fbc02c0602f2817b259/ATTRIBUTION
+
+Heavy Pockets uses the Section02/S2B3 exterior architectural mesh and its associated
+material textures. The paving, four table settings, chairs, menu and topiary come
+from Ground and Section02/BistroProps in the same scene. The street-facing shell was trimmed and paired with a rotated
+instance to make a freestanding building. Original texture maps were resized and
+adapted to Unity Standard materials. The three distance meshes were simplified,
+and the far mesh samples color from the source textures at its vertices. The
+prefab adds simplified collision volumes. The menu board, folding chair and
+terrace table also have individual editor prefabs that share the same materials.
+These are modifications for the game.

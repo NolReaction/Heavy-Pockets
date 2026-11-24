@@ -34,7 +34,28 @@ namespace HeavyPockets
         internal static readonly Bounds DepotCargo = Box(DepotCrate.x, 0, DepotCrate.y, CrateX, .86f, CrateZ);
         internal static Bounds CargoCase => TrainingGround.Active ? TrainingGround.ChestBounds : DepotCargo;
         private static readonly Bounds[] DepotBoxes = BuildCollisionBoxes();
-        internal static Bounds[] CollisionBoxes => TrainingGround.Active ? TrainingLayout.Collision : DepotBoxes;
+        private static Bounds[] layoutBoxes;
+        private static Bounds[][] layoutCells;
+        private static bool layoutTraining;
+        private static bool HasLayout => layoutBoxes != null && layoutTraining == TrainingGround.Active;
+        internal static Bounds[] CollisionBoxes => HasLayout ? layoutBoxes : TrainingGround.Active ? TrainingLayout.Collision : DepotBoxes;
+        internal static Bounds[] PlanWalls { get; private set; } = Array.Empty<Bounds>();
+
+        internal static void LoadLayout()
+        {
+            layoutTraining = TrainingGround.Active;
+            var plan = WorldPlan.Load(layoutTraining);
+            PlanWalls = plan ? plan.Walls() : Array.Empty<Bounds>();
+            YardOcclusion.IndexPlan(PlanWalls);
+            layoutBoxes = null;
+            layoutCells = null;
+            if (PlanWalls.Length == 0) return;
+            var original = layoutTraining ? TrainingLayout.Collision : DepotBoxes;
+            layoutBoxes = new Bounds[original.Length + PlanWalls.Length];
+            original.CopyTo(layoutBoxes, 0);
+            PlanWalls.CopyTo(layoutBoxes, original.Length);
+            layoutCells = BuildCollisionCells(layoutBoxes);
+        }
 
         private const float ContactTolerance = .0005f;
         private const int CellSize = 8;
@@ -84,7 +105,7 @@ namespace HeavyPockets
         private static int Column(float x) => Mathf.Clamp(Mathf.FloorToInt((x + RoomX) / CellSize), 0, Columns - 1);
         private static int Row(float z) => Mathf.Clamp(Mathf.FloorToInt((z + RoomZ) / CellSize), 0, Rows - 1);
         private static Bounds[] Nearby(Vector2 p) =>
-            (TrainingGround.Active ? RangeCells.All : collisionCells)[Row(p.y) * Columns + Column(p.x)];
+            (HasLayout ? layoutCells : TrainingGround.Active ? RangeCells.All : collisionCells)[Row(p.y) * Columns + Column(p.x)];
 
         private static Bounds Box(float x, float bottom, float z, float halfX, float top, float halfZ)
         {

@@ -12,7 +12,10 @@ namespace HeavyPockets
         {
             internal Vector2Int Key;
             internal Vector3 Offset;
-            internal Vector2 Extents;
+            internal Vector2 Extents, CenterShift;
+            internal bool Planned;
+            internal Quaternion Rotation;
+            internal float Visibility = 1f;
             internal TileRequest Near;
             internal GameObject Proxy, Detail;
             internal string ResourcePath;
@@ -76,6 +79,22 @@ namespace HeavyPockets
         internal static bool ReleasedAllCells => TileRequest.Idle;
         internal int LoadedCellCount { get; private set; }
 
+        private void RegisterPlanCells(WorldPlan plan)
+        {
+            if (!plan) return;
+            foreach (var item in plan.Objects)
+            {
+                if (!item.Piece || string.IsNullOrEmpty(item.Piece.Tile)) continue;
+                var box = item.Place(item.Piece.Envelope);
+                portCells.Add(new PortCell {
+                    Planned = true, ResourcePath = item.Piece.Tile, Offset = item.Position, Rotation = item.Rotation,
+                    Extents = new Vector2(box.extents.x, box.extents.z),
+                    CenterShift = new Vector2(box.center.x - item.Position.x, box.center.z - item.Position.z),
+                    Visibility = Mathf.Clamp(Mathf.Max(box.size.x, box.size.y, box.size.z) / 8f, 1f, 3f)
+                });
+            }
+        }
+
         private void InitializeStreaming()
         {
             foreach (Material surface in surfaces) cellMaterials[surface.name] = surface;
@@ -118,7 +137,7 @@ namespace HeavyPockets
             gate.Bind(shutter);
         }
 
-        private GameObject InstantiateCell(PortCellAsset asset, string label, Vector3 offset = default)
+        private GameObject InstantiateCell(PortCellAsset asset, string label, Vector3 offset = default, bool planned = false)
         {
             var tile = new GameObject($"{label} [{asset.Cell.x},{asset.Cell.y}]");
             tile.transform.SetParent(root, false);
@@ -143,6 +162,12 @@ namespace HeavyPockets
                     var instance = Object.Instantiate(prop.Prefab, tile.transform, false).transform;
                     instance.SetLocalPositionAndRotation(prop.Position, prop.Rotation);
                     instance.localScale *= prop.Scale;
+                    if (planned)
+                    {
+                        // Only the shared collision world participates in physics.
+                        foreach (var collider in instance.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
+                        continue;
+                    }
                     if (instance.TryGetComponent<WarehouseFloorScale>(out var scale)) FloorScale = scale;
                     var door = instance.Find(ReceivingWarehouseLayout.DoorLeafName);
                     if (door != null)
@@ -162,9 +187,9 @@ namespace HeavyPockets
         {
             if (cell.Extents != Vector2.zero)
             {
-                float dx = Mathf.Max(0,Mathf.Abs(point.x-cell.Offset.x)-cell.Extents.x);
-                float dz = Mathf.Max(0,Mathf.Abs(point.y-cell.Offset.z)-cell.Extents.y);
-                return dx*dx + dz*dz;
+                float dx = Mathf.Max(0, Mathf.Abs(point.x - cell.Offset.x - cell.CenterShift.x) - cell.Extents.x);
+                float dz = Mathf.Max(0, Mathf.Abs(point.y - cell.Offset.z - cell.CenterShift.y) - cell.Extents.y);
+                return (dx*dx + dz*dz) / (cell.Visibility * cell.Visibility);
             }
             var key = cell.Key;
             float x = Mathf.Max(0f, Mathf.Max(key.x * PortCellAsset.Width - point.x, point.x - (key.x + 1) * PortCellAsset.Width));
@@ -193,7 +218,8 @@ namespace HeavyPockets
                 else
                 {
                     loadingCell = null;
-                    cell.Detail = InstantiateCell(asset, "Port cell", cell.Offset);
+                    cell.Detail = InstantiateCell(asset, "Port cell", cell.Offset, cell.Planned);
+                    if (cell.Planned) cell.Detail.transform.localRotation = cell.Rotation;
                     if (cell.House)
                     {
                         try { BuildChartHouse(cell.Detail.transform, asset.ChartHouseShell, asset.ChartHouseDetail,
@@ -212,7 +238,7 @@ namespace HeavyPockets
                         }
                         finally { HarborInteriorMaterials.CancelPrefetch(); }
                     }
-                    cell.Proxy.SetActive(false);
+                    if (cell.Proxy) cell.Proxy.SetActive(false);
                     LoadedCellCount++;
                     return; // Budget one activation or unload per frame.
                 }
@@ -225,7 +251,7 @@ namespace HeavyPockets
                 float distance = DistanceSquared(playerXZ, cell);
                 if (cell.Detail != null && distance > LeaveDistance * LeaveDistance)
                 {
-                    cell.Proxy.SetActive(true);
+                    if (cell.Proxy) cell.Proxy.SetActive(true);
                     cell.Detail.SetActive(false);
                     Object.Destroy(cell.Detail);
                     cell.Detail = null;

@@ -39,6 +39,7 @@ namespace HeavyPockets
             RefreshSignAtlas(font);
             if (forCellBake) return;
             Font.textureRebuilt += RefreshSignAtlas;
+            RegisterPlanCells(WorldPlan.Load(TrainingGround.Active));
 
             if (TrainingGround.Active)
             {

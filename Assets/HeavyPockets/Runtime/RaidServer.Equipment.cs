@@ -26,6 +26,8 @@ namespace HeavyPockets
             if (selection)
             {
                 var slot = (GearLocation)bytes[5];
+                if (GearCatalog.Selectable(slot) && GearCatalog.IsPouchCell(slot))
+                    slot = GearCatalog.PouchOwner(slot, loot.Gear(player.Id));
                 if (!GearCatalog.Selectable(slot) || !loot.HasGear(player.Id, slot))
                 {
                     Status(player, RaidStatus.Denied, operation);

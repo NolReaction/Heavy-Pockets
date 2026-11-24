@@ -124,10 +124,14 @@ function Read-Audit([string]$name) {
                     $active = [int]$bytes[1]
                     $gearIds = @(0L)
                     $gearTypes = @(0)
+                    $pouchCells = @{}
                     for ($slot=1; $slot -le 9; $slot++) {
                         $offset = 2 + 5*($slot-1)
                         $uid = [long][BitConverter]::ToUInt32($bytes,$offset)
-                        $type = [int]$bytes[$offset + 4]
+                        $gearByte = [int]$bytes[$offset + 4]
+                        $type = $gearByte -band 127
+                        $rotated = ($gearByte -band 128) -ne 0
+                        Require (!$rotated -or ($slot -ge 6 -and $uid -ne 0)) "$name rotated empty or worn slot"
                         Require (($uid -eq 0) -eq ($type -eq 0)) "$name invalid equipment record"
                         if ($uid -ne 0) {
                             Require ($uid -notin $gearIds) "$name duplicate equipment instance"
@@ -137,8 +141,19 @@ function Read-Audit([string]$name) {
                             elseif ($slot -eq 5) { Require ($type -in 16..19) "$name incompatible pouch" }
                             else {
                                 $cargo = $type -in 1..11 -or ($type -ge 21 -and $type -lt $widths.Count)
-                                $fits = $cargo -and ($widths[$type] * $heights[$type] -le 2)
-                                Require ($fits -and $slot-5 -le $gearTypes[5]-15) "$name incompatible or locked pocket"
+                                Require $cargo "$name incompatible pouch item"
+                                $w = if ($rotated) { $heights[$type] } else { $widths[$type] }
+                                $h = if ($rotated) { $widths[$type] } else { $heights[$type] }
+                                $col = ($slot - 6) % 2
+                                $pouchRow = [math]::Floor(($slot - 6) / 2)
+                                Require ($col + $w -le 2 -and $pouchRow + $h -le 2) "$name pouch item overhangs its grid"
+                                for ($dy=0; $dy -lt $h; $dy++) {
+                                    for ($dx=0; $dx -lt $w; $dx++) {
+                                        $index = [int](($pouchRow + $dy) * 2 + $col + $dx)
+                                        Require ($index -lt $gearTypes[5]-15 -and !$pouchCells.ContainsKey($index)) "$name locked or overlapping pouch footprint"
+                                        $pouchCells[$index] = $uid
+                                    }
+                                }
                             }
                         }
                         $gearIds += $uid
@@ -758,23 +773,23 @@ $levels = @($events | Where-Object { $_.peer -eq $id.A -and $_.code -eq 11 -and 
 Require (($choices.pouchLevel -join ',') -ceq '2,3,4,1,2' -and ($levels.pouchLevel -join ',') -ceq '2,3,4,1,2') 'base pouch levels did not confirm'
 Require ($choices[0].sequence -gt $receipts.A -and $choices[-1].sequence -lt $aReady[0].sequence -and
     $aGear[0].gearTypes[5] -eq 17 -and $bGear[0].gearTypes[5] -eq 16) 'selected pouch leaked or failed to persist into next raid'
-Require (($moves.sourceSlot -join ',') -ceq '10,5,10,10,1,2,10,2,10,0,10,4,0,3,0' -and
-    ($moves.destSlot -join ',') -ceq '8,0,6,7,2,1,4,0,4,2,4,0,4,0,3') 'wrong equipment drag/drop history'
-Require (($select.destSlot -join ',') -ceq '2,1,6,7,2,6') 'wrong quick-access selection history'
+Require (($moves.sourceSlot -join ',') -ceq '10,5,10,10,1,2,2,10,0,10,4,0,3,0' -and
+    ($moves.destSlot -join ',') -ceq '8,0,6,4,2,1,0,4,2,4,0,4,0,3') 'wrong equipment drag/drop or Alt equip history'
+Require (($select.destSlot -join ',') -ceq '2,1,6,6,2,6') 'wrong quick-access selection history'
 foreach ($cmd in @($moves + $select)) {
     $ack = @($nextEvents | Where-Object { $_.peer -eq $id.A -and $_.code -eq 6 -and $_.operation -eq $cmd.operation })
-    $expected = if ($cmd.operation -in $moves[0,1].operation) { 6 } elseif ($cmd.operation -eq $moves[8].operation) { 13 } else { 12 }
+    $expected = if ($cmd.operation -in $moves[0,1].operation) { 6 } elseif ($cmd.operation -eq $moves[7].operation) { 13 } else { 12 }
     Require ($ack.Count -eq 1 -and $ack[0].status -eq $expected -and $ack[0].sequence -gt $cmd.sequence) 'missing or wrong equipment acknowledgement'
 }
 $final = $aGear[-1]
 Require (($final.gearIds[1..5] -join ',') -ceq ($aGear[0].gearIds[1..5] -join ',') -and
-    $final.gearIds[6] -eq $moves[2].instance -and $final.gearIds[7] -eq $moves[3].instance -and
+    $final.gearIds[6] -eq $moves[2].instance -and $final.gearIds[7] -eq 0 -and
     $final.gearIds[8] -eq 0 -and $final.gearIds[9] -eq 0 -and $final.active -eq 6) 'gear ownership or final quick selection diverged'
 $localMoves = @($clientLogs.A | Where-Object { $_.activeRound -eq 2 -and $_.channel -eq 'command' -and $_.code -eq 9 })
 $firstReply = @($clientLogs.A | Where-Object { $_.activeRound -eq 2 -and $_.channel -eq 'event' -and
     $_.code -eq 6 -and $_.operation -eq $localMoves[2].operation })
 Require ($firstReply.Count -eq 1 -and $localMoves[3].sequence -lt $firstReply[0].sequence) 'second independent drop was not sent before the first acknowledgement'
-Mark 'Two independent drops reached the first two pouch pockets before the first acknowledgement. A locked pocket and an in-raid pouch change were refused.'
+Mark 'A pouch drop and Alt equip reached the server before the first acknowledgement. Pouch footprints fit unlocked cells without overlap, and an in-raid pouch change was refused.'
 Mark 'Five private equipment positions, weapon swapping, armor unequip/equip, a 24/36/54-cell shared inventory and quick keys 1-4 survived real drag and selection actions. An occupied ninth row prevented backpack downsizing. Both backpacks and all four pouch tiers appeared in the test crate.'
 Mark 'All four pouch levels were selectable at base and the chosen loadout survived entry into the next raid. The second player kept their own kit.'
 foreach ($role in 'A','B') {

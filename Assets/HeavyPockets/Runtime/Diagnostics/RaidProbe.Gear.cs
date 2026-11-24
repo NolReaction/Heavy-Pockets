@@ -19,13 +19,13 @@ namespace HeavyPockets
             yield return new WaitForSecondsRealtime(.20f);
         }
 
-        private bool DropOnEquipment(LootItem item, GearLocation from, GearLocation to)
+        private bool DropOnEquipment(LootItem item, GearLocation from, GearLocation to, bool turn = false)
         {
             bool fromGrid = from == GearLocation.Crate || from == GearLocation.Bag;
             bool pressed = fromGrid
                 ? Client.ProbeCellInput(from == GearLocation.Bag, item.X, item.Y, EventType.MouseDown)
                 : Client.ProbeGearPointer(from, EventType.MouseDown);
-            return pressed && Client.ProbeGearPointer(to, EventType.MouseDrag) &&
+            return pressed && (!turn || Client.ProbeRotateHeld()) && Client.ProbeGearPointer(to, EventType.MouseDrag) &&
                 Client.ProbeGearPointer(to, EventType.MouseUp) && Client.ProbeEquipmentState.Gear[(int)to].Id == item.Id;
         }
 
@@ -75,26 +75,34 @@ namespace HeavyPockets
             yield return ChooseSlot(2, GearLocation.Secondary);
             yield return ChooseSlot(1, GearLocation.Primary);
 
-            var cargo = crate.Where(i => GearCatalog.Accepts(GearLocation.PouchCell, i.Type)).Take(2).ToArray();
-            if (cargo.Length != 2) { Fail("Expected two compact crate items"); yield break; }
-            if (DropOnEquipment(cargo[0], GearLocation.Crate, GearLocation.PouchCell3))
+            var cargo = crate.Where(i => GearCatalog.Accepts(GearLocation.PouchCell, i.Type))
+                .Where(i => LootCatalog.Width(i.Type, false) * LootCatalog.Height(i.Type, false) <= 2)
+                .OrderByDescending(i => LootCatalog.Width(i.Type, false) * LootCatalog.Height(i.Type, false)).First();
+            bool turn = LootCatalog.Height(cargo.Type, cargo.Rotated) > 1;
+            if (DropOnEquipment(cargo, GearLocation.Crate, GearLocation.PouchCell3, turn))
             { Fail("A locked pouch pocket accepted an item"); yield break; }
             Client.ProbeCancelDrag();
             int denials = gearDenials;
-            link.MoveGear(cargo[0].Id, GearLocation.Crate, GearLocation.PouchCell3);
+            link.MoveGear(cargo.Id, GearLocation.Crate, GearLocation.PouchCell3);
             yield return new WaitUntil(() => gearDenials == denials + 1);
             link.MoveGear(gearSlots[(int)GearLocation.Pouch].Id, GearLocation.Pouch, GearLocation.Bag);
             yield return new WaitUntil(() => gearDenials == denials + 2);
             yield return new WaitForSecondsRealtime(.35f);
             Phase("two independent drops before either acknowledgement");
-            if (!DropOnEquipment(cargo[0], GearLocation.Crate, GearLocation.PouchCell) ||
-                !DropOnEquipment(cargo[1], GearLocation.Crate, GearLocation.PouchCell2))
-            { Fail("One of two successive pouch drops was lost"); yield break; }
-            yield return new WaitUntil(() => gearSlots[(int)GearLocation.PouchCell].Id == cargo[0].Id &&
-                gearSlots[(int)GearLocation.PouchCell2].Id == cargo[1].Id && crate.All(i => i.Id != cargo[1].Id));
+            var regular = gearSlots[(int)GearLocation.Backpack];
+            var expedition = crate.Single(i => i.Type == GearCatalog.ExpeditionPack);
+            if (!DropOnEquipment(cargo, GearLocation.Crate, GearLocation.PouchCell, turn) ||
+                !Client.ProbeAltEquip(false, expedition) || Client.ProbeGearItem(GearLocation.Backpack).Id != expedition.Id)
+            { Fail("Pouch drop or simultaneous Alt equip was lost"); yield break; }
+            yield return new WaitUntil(() => gearSlots[(int)GearLocation.PouchCell].Id == cargo.Id &&
+                gearSlots[(int)GearLocation.Backpack].Id == expedition.Id && crate.All(i => i.Id != expedition.Id));
+            bool wide = LootCatalog.Width(cargo.Type, cargo.Rotated ^ turn) == 2;
+            if (gearSlots[(int)GearLocation.PouchCell].Rotated != (cargo.Rotated ^ turn) ||
+                (wide && GearCatalog.PouchOwner(GearLocation.PouchCell2, gearSlots) != GearLocation.PouchCell))
+            { Fail("Authoritative pouch footprint differed from the preview"); yield break; }
             yield return new WaitForSecondsRealtime(.21f);
             yield return ChooseSlot(3, GearLocation.PouchCell);
-            yield return ChooseSlot(4, GearLocation.PouchCell2);
+            yield return ChooseSlot(wide ? 4 : 3, GearLocation.PouchCell);
 
             var primary = gearSlots[(int)GearLocation.Primary];
             var secondary = gearSlots[(int)GearLocation.Secondary];
@@ -104,9 +112,6 @@ namespace HeavyPockets
             yield return IntoEquipment(primary, GearLocation.Secondary, GearLocation.Primary);
 
             Phase("expanding the existing inventory");
-            var regular = gearSlots[(int)GearLocation.Backpack];
-            var expedition = crate.Single(i => i.Type == GearCatalog.ExpeditionPack);
-            yield return IntoEquipment(expedition, GearLocation.Crate, GearLocation.Backpack);
             if (GearCatalog.BagRows(gearSlots) != 9 || !crate.Any(i => i.Id == regular.Id))
             { Fail("Backpack swap failed to extend the existing grid or return the field pack"); yield break; }
             yield return IntoBag(GearLocation.Secondary, 0, 8);
@@ -121,7 +126,9 @@ namespace HeavyPockets
             { Fail("Denied backpack swap changed cargo or equipment"); yield break; }
             Capture("gear-crate");
             yield return new WaitForSecondsRealtime(.22f);
-            yield return IntoEquipment(bag.Single(i => i.Id == secondary.Id), GearLocation.Bag, GearLocation.Secondary);
+            if (!Client.ProbeAltEquip(true, bag.Single(i => i.Id == secondary.Id)))
+            { Fail("Alt equip from bag started an ordinary drag"); yield break; }
+            yield return new WaitUntil(() => gearSlots[(int)GearLocation.Secondary].Id == secondary.Id);
             yield return IntoEquipment(field, GearLocation.Crate, GearLocation.Backpack);
             yield return IntoBag(GearLocation.Backpack, 0, 0);
             if (GearCatalog.BagRows(gearSlots) != 4)

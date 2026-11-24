@@ -23,6 +23,7 @@ namespace HeavyPockets
 
         internal static void Create(Transform parent)
         {
+            RaidMap.LoadLayout();
             var port = new GameObject("Port hitboxes");
             port.transform.SetParent(parent, false);
             current = port;

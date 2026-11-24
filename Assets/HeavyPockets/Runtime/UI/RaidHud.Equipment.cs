@@ -29,13 +29,11 @@ namespace HeavyPockets
 
         private static Rect GearRect(Board board, GearLocation slot)
         {
-            const float pouchCell = Cell;
             if (slot == GearLocation.Backpack)
                 return new Rect(board.BagPanel.x + Side, board.BagPanel.y + 35, 38, 38);
             int i = Array.IndexOf(pouchCells, slot);
             if (i >= 0)
-                return new Rect(board.Bag.x + (i % 2) * (pouchCell + 3), board.Bag.yMax + 25 + (i / 2) * (pouchCell + 3),
-                    pouchCell, pouchCell);
+                return new Rect(board.Bag.x + (i % 2) * Cell, board.Bag.yMax + 25 + (i / 2) * Cell, Cell, Cell);
             i = Array.IndexOf(wornSlots, slot);
             if (i < 0) return Rect.zero;
             Rect pane = board.EquipmentPanel;
@@ -54,6 +52,44 @@ namespace HeavyPockets
                 }
             slot = GearLocation.Bag;
             return false;
+        }
+
+        private static Rect GearItemRect(Board board, GearLocation slot, LootItem item)
+        {
+            var r = GearRect(board, slot);
+            if (GearCatalog.IsPouchCell(slot) && item.Id != 0)
+                r.size = new Vector2(Cell * LootCatalog.Width(item.Type, item.Rotated), Cell * LootCatalog.Height(item.Type, item.Rotated));
+            return r;
+        }
+
+        private bool PouchDrop(Board board, out GearLocation slot)
+        {
+            Vector2 start = (GhostCenter - HeldSize * .5f - GearRect(board, GearLocation.PouchCell).position) / Cell;
+            int x = Mathf.FloorToInt(start.x + .5f), y = Mathf.FloorToInt(start.y + .5f);
+            slot = (GearLocation)((int)GearLocation.PouchCell + x + y * GearCatalog.PouchWidth);
+            return x >= 0 && x < 2 && y >= 0 && y < 2;
+        }
+
+        private void AutoEquip(State state, LootItem item, GearLocation from)
+        {
+            if (GearCatalog.Accepts(GearLocation.Primary, item.Type))
+            {
+                var slot = item.Type == GearCatalog.Pistol ? GearLocation.Secondary : GearLocation.Primary;
+                var other = slot == GearLocation.Primary ? GearLocation.Secondary : GearLocation.Primary;
+                if (GearItem(state, slot).Id != 0 && GearItem(state, other).Id == 0)
+                    (slot, other) = (other, slot);
+                if (!TryAutoEquip(state, item, from, slot)) TryAutoEquip(state, item, from, other);
+            }
+            else if (GearCatalog.Accepts(GearLocation.Armor, item.Type)) TryAutoEquip(state, item, from, GearLocation.Armor);
+            else if (GearCatalog.Accepts(GearLocation.Backpack, item.Type)) TryAutoEquip(state, item, from, GearLocation.Backpack);
+        }
+
+        private bool TryAutoEquip(State state, LootItem item, GearLocation from, GearLocation slot)
+        {
+            if (GearCatalog.PlanMove(item, from, slot, -1, -1, false, state.BagItems, state.CrateItems,
+                state.Gear, state.Unknown, out _, out _) != RaidStatus.Placed) return false;
+            MoveGear?.Invoke(item.Id, from, slot, -1, -1, false);
+            return true;
         }
 
         private void ResetGearInteraction()
@@ -97,6 +133,7 @@ namespace HeavyPockets
             if (type == EventType.MouseDown)
             {
                 CancelDrag();
+                slot = GearCatalog.PouchOwner(slot, state.Gear);
                 LootItem item = GearItem(state, slot);
                 selectedGear = slot;
                 selectedId = item.Id;
@@ -112,22 +149,22 @@ namespace HeavyPockets
                     CancelDrag();
                     return true;
                 }
-                Rect box = GearRect(board, slot);
+                Rect box = GearItemRect(board, slot, item);
                 Vector2 offset = box.center - p;
                 grabToCenter = new Vector2(offset.x * HeldSize.x / box.width, offset.y * HeldSize.y / box.height);
                 pressPoint = p;
                 return true;
             }
             if (type != EventType.MouseUp || held.Id == 0) return false;
-            if (dragging && CanMoveGear(state, slot))
+            if (dragging && (!GearCatalog.IsPouchCell(slot) || PouchDrop(board, out slot)) && CanMoveGear(state, slot))
             {
                 var from = IsGearSlot(heldGear) ? heldGear : heldBag ? GearLocation.Bag : GearLocation.Crate;
                 MoveGear?.Invoke(held.Id, from, slot, -1, -1, rotated);
             }
-            else if (!dragging && slot == heldGear)
+            else if (!dragging && GearCatalog.PouchOwner(slot, state.Gear) == heldGear)
             {
                 keyboardFocus = true;
-                if (GearCatalog.Selectable(slot)) SelectGear?.Invoke(slot);
+                if (GearCatalog.Selectable(heldGear)) SelectGear?.Invoke(heldGear);
             }
             CancelDrag();
             return true;
@@ -146,18 +183,50 @@ namespace HeavyPockets
 
             float left = board.Bag.x, top = board.Bag.yMax + 6;
             Text(left, top - 1, 89, 17, "Подсумок", 12, PrintInk, true);
-            for (int i = 0; i < pouchCells.Length; i++)
-                DrawGearSlot(state, board, pouchCells[i]);
+            DrawPouch(state, board);
             for (int i = 0; i < wornSlots.Length; i++)
                 DrawGearSlot(state, board, wornSlots[i]);
+        }
+
+        private void DrawPouch(State state, Board board)
+        {
+            var grid = GearRect(board, GearLocation.PouchCell);
+            grid.size = new Vector2(2 * Cell, 2 * Cell);
+            Fill(grid, GridLine);
+            foreach (var slot in pouchCells)
+            {
+                Rect cell = GearRect(board, slot);
+                var inner = new Rect(cell.x + 1, cell.y + 1, Cell - 2, Cell - 2);
+                bool open = GearCatalog.Available(slot, state.Gear);
+                Fill(inner, open ? EmptyCell : LockedCell);
+                if (!open) { Hatch(inner); DrawLock(cell.center, GridLine); }
+            }
+            foreach (var slot in pouchCells)
+            {
+                var item = GearItem(state, slot);
+                if (item.Id == 0 || (dragging && held.Id == item.Id)) continue;
+                Rect r = GearItemRect(board, slot, item);
+                var tile = new Rect(r.x + 1, r.y + 1, r.width - 2, r.height - 2);
+                ItemWash(tile, item.Type);
+                LootArt.Draw(ItemArtRect(tile), item.Type, item.Rotated);
+                if (state.ActiveGear == slot || (keyboardFocus && selectedGear == slot) ||
+                    (!keyboardFocus && pointerActive && r.Contains(pointer)))
+                    Corners(tile, state.ActiveGear == slot ? Mint : FieldLabel, 4f, 1f);
+            }
+            if (dragging && grid.Contains(pointer) && PouchDrop(board, out var drop))
+            {
+                Rect r = GearRect(board, drop);
+                r.size = HeldSize;
+                Outline(Rect.MinMaxRect(r.x, r.y, Mathf.Min(grid.xMax, r.xMax), Mathf.Min(grid.yMax, r.yMax)),
+                    CanMoveGear(state, drop) ? Mint : Bad, 2);
+            }
         }
 
         private void DrawGearSlot(State state, Board board, GearLocation slot)
         {
             Rect r = GearRect(board, slot);
             LootItem item = GearItem(state, slot);
-            bool pouchCell = Array.IndexOf(pouchCells, slot) >= 0;
-            bool small = pouchCell || slot == GearLocation.Backpack;
+            bool small = slot == GearLocation.Backpack;
             bool available = GearCatalog.Available(slot, state.Gear);
             bool under = pointerActive && !state.WorldLook && r.Contains(pointer);
             bool active = state.ActiveGear == slot && item.Id != 0;
@@ -180,7 +249,7 @@ namespace HeavyPockets
             if (!small)
             {
                 string name = slot == GearLocation.Primary ? "Основное" : slot == GearLocation.Secondary ? "Запасное" : GearCatalog.Name(slot);
-                Block(r.x + 1, r.y + 1, r.width - 2, 19, new Color32(24, 37, 39, 130));
+                Block(r.x + 1, r.y + 1, r.width - 2, 19, new Color32(14, 21, 31, 123));
                 Text(x, y - 2, r.xMax - x - 3, 18, name, 12, Paper, true);
             }
             bool pouch = slot == GearLocation.Pouch;
@@ -201,6 +270,11 @@ namespace HeavyPockets
                 var r = new Rect(x + i * 41, y, 40, 23);
                 LootItem item = GearItem(state, quickSlots[i]);
                 bool active = item.Id != 0 && state.ActiveGear == quickSlots[i];
+                if (i == 2 && item.Id != 0 && GearCatalog.PouchOwner(quickSlots[3], state.Gear) == quickSlots[2])
+                {
+                    r.width += 41;
+                    i++;
+                }
                 if (item.Id != 0)
                 {
                     ItemWash(r, item.Type);
@@ -223,8 +297,9 @@ namespace HeavyPockets
                 GearLocation slot = selectedGear;
                 if (gearFocus || (!keyboardFocus && pointerActive && GearHit(board, pointer, out slot)))
                 {
+                    slot = GearCatalog.PouchOwner(slot, state.Gear);
                     item = GearItem(state, slot);
-                    if (item.Id != 0 && (gearFocus || hoverId == item.Id)) anchor = GearRect(board, slot);
+                    if (item.Id != 0 && (gearFocus || hoverId == item.Id)) anchor = GearItemRect(board, slot, item);
                     else item = default;
                 }
                 else
@@ -291,7 +366,7 @@ namespace HeavyPockets
             GUI.color = Fade(previous, cardOpacity);
             DrawPaper(r);
             Outline(r, Umber, 1);
-            Block(r.x, r.y, r.width, 3, item.Id == 0 ? Oxide : Color.Lerp(PrintInk, tint, .5f));
+            Block(r.x, r.y, r.width, 3, item.Id == 0 ? Palette.Accent : tint);
             Text(r.x + icon, r.y + 4, w - 2 * icon, title, name, 13, PrintInk, true);
             string metadata = item.Id == 0 ? "Не опознано" : LootCatalog.RarityName(item.Type) + "  ·  " +
                 LootCatalog.Width(item.Type, item.Rotated) + "×" + LootCatalog.Height(item.Type, item.Rotated);
@@ -327,7 +402,10 @@ namespace HeavyPockets
             if (!IsGearSlot(slot)) return false;
             var board = GetBoard(state, out _);
             scriptedPointer = true;
-            return HandlePointer(state, board, GearRect(board, slot).center, type, ctrl, false);
+            Rect cell = GearRect(board, slot);
+            Vector2 point = GearCatalog.IsPouchCell(slot) && held.Id != 0 && type != EventType.MouseDown ?
+                cell.position + HeldSize * .5f - grabToCenter : cell.center;
+            return HandlePointer(state, board, point, type, ctrl, false);
         }
 
         internal void ProbeGearHover(State state, GearLocation slot)

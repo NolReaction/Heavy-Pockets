@@ -13,6 +13,9 @@ namespace HeavyPockets
 
         internal GearLocation ProbeActiveGear => InventoryState().ActiveGear;
         internal bool ProbeTipVisible => hud.ProbeTipVisible;
+        internal bool ProbeAltEquip(bool bag, LootItem item) => ScriptedInput && inventoryOpen &&
+            hud.ProbePointer(InventoryState(), bag, item.X + .5f, item.Y + .5f, EventType.MouseDown, false, true) &&
+            !hud.IsHoldingItem;
         internal bool ProbeGearPointer(GearLocation slot, EventType type, bool ctrl = false) =>
             ScriptedInput && inventoryOpen && hud.ProbeGearPointer(InventoryState(), slot, type, ctrl);
         internal bool ProbeGearDropToGrid(bool bag, int x, int y, EventType type) =>

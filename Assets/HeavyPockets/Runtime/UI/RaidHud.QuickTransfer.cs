@@ -60,7 +60,7 @@ namespace HeavyPockets
             }
             if (!deliberate && !moved && !releasedLook) return;
             LootItem under = UnderPointer(state, board, point, out _);
-            if (under.Id == 0 && GearHit(board, point, out var slot)) under = GearItem(state, slot);
+            if (under.Id == 0 && GearHit(board, point, out var slot)) under = GearItem(state, GearCatalog.PouchOwner(slot, state.Gear));
             if (releasedLook && !deliberate && keyboardFocus && under.Id == 0) return;
             keyboardFocus = false;
             pointerActive = true;

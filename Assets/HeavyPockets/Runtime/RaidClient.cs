@@ -168,6 +168,9 @@ namespace HeavyPockets
         internal bool OwnAvatarVisible => ownModel != null && ownModel.gameObject.activeInHierarchy;
         private float yaw, pitch, nextSend;
         private bool crateOpen, inventoryOpen, searchComplete, extracted, disconnected;
+        private bool inventoryControlHeld;
+        private float openRequestUntil;
+        private bool OpeningContainer => Time.unscaledTime < openRequestUntil;
         private bool lockAfterClose, closeRequested, bagFromMenu, captureOnSpawn;
         private bool inventoryLooking;
         private float searchFinishAt;
@@ -373,6 +376,7 @@ namespace HeavyPockets
                     }
                     break;
                 case RaidEventKind.Crate:
+                    openRequestUntil = 0f;
                     if (closeRequested) break;
                     if (screen != RaidScreen.Play)
                     {
@@ -423,6 +427,9 @@ namespace HeavyPockets
 
         private void HandleStatus(RaidStatus status)
         {
+            if (status == RaidStatus.Opened) openRequestUntil = Time.unscaledTime + RaidContainers.LidSeconds + 2f;
+            if (status == RaidStatus.Blocked || status == RaidStatus.OutOfRange || status == RaidStatus.Closed || status == RaidStatus.CrateLost)
+                openRequestUntil = 0f;
             switch (status)
             {
                 case RaidStatus.Closed:
@@ -640,7 +647,7 @@ namespace HeavyPockets
         private void CloseInventory(bool returnToGame)
         {
             lockAfterClose = returnToGame;
-            if (crateOpen && !closeRequested) { closeRequested = true; Link.Close(); }
+            if ((crateOpen || OpeningContainer) && !closeRequested) { closeRequested = true; Link.Close(); }
             bool back = bagFromMenu;
             bagFromMenu = false;
             if (back) screen = RaidScreen.Menu;
@@ -650,6 +657,7 @@ namespace HeavyPockets
         private void HideInventory(bool returnToGame)
         {
             crateOpen = inventoryOpen = searchComplete = inventoryLooking = false;
+            openRequestUntil = 0f;
             searchFinishAt = 0f;
             inventory.Close(disconnected || extracted);
             hud?.ResetSelection();
@@ -683,6 +691,8 @@ namespace HeavyPockets
 
         private void ReadControls()
         {
+            bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+            bool usingInventory = inventoryOpen || OpeningContainer;
             if (Application.isFocused)
             {
                 ReadGearKeys();
@@ -705,7 +715,7 @@ namespace HeavyPockets
                     else if (Input.GetKeyDown(KeyCode.E))
                     {
                         if (crateOpen) CloseInventory(true);
-                        else if (!closeRequested && RaidContainers.Closest(OwnPosition,OwnMotion,out byte target)) Link.Open(target);
+                        else if (!closeRequested && RaidContainers.Closest(OwnPosition,OwnMotion,out byte target)) RequestOpen(target);
                     }
                     else if (crateOpen && (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)))
                         hud.TransferSelection(InventoryState());
@@ -722,7 +732,7 @@ namespace HeavyPockets
                         {
                             var ray = Cursor.lockState == CursorLockMode.Locked
                                 ? view.ViewportPointToRay(new Vector3(.5f,.5f)) : view.ScreenPointToRay(Input.mousePosition);
-                            if (RaidContainers.UnderPointer(ray,OwnPosition,OwnMotion,out byte target)) Link.Open(target);
+                            if (RaidContainers.UnderPointer(ray,OwnPosition,OwnMotion,out byte target)) RequestOpen(target);
                         }
                         CaptureCursor();
                     }
@@ -737,14 +747,23 @@ namespace HeavyPockets
                 ((Cursor.lockState == CursorLockMode.Locked) || inventoryOpen);
             if (!control) jumpPending = false;
             else if (Input.GetKeyDown(KeyCode.Space)) jumpPending = true;
-            bool crouchPressed = control && (Input.GetKeyDown(KeyCode.LeftControl) || Input.GetKeyDown(KeyCode.RightControl));
+            inventoryControlHeld = RunnerInput.ConsumeInventoryControl(ctrl, usingInventory || inventoryOpen || OpeningContainer, inventoryControlHeld);
+            bool crouchPressed = control && !inventoryControlHeld && (Input.GetKeyDown(KeyCode.LeftControl) || Input.GetKeyDown(KeyCode.RightControl));
             if (crouchPressed || jumpPending || Time.unscaledTime >= nextSend)
             {
                 Vector2 direction = MovementFromKeys(RunnerInput.Keys(), Application.isFocused, Cursor.lockState == CursorLockMode.Locked);
                 MoveButtons buttons = control ? RunnerInput.Buttons(jumpPending) : MoveButtons.None;
+                if (inventoryControlHeld) buttons &= ~MoveButtons.Crouch;
                 SendMovement(direction, buttons);
                 jumpPending = false;
             }
+        }
+
+        private void RequestOpen(byte target)
+        {
+            // Open requests can be throttled before the server starts the lid animation.
+            openRequestUntil = Time.unscaledTime + RaidContainers.LidSeconds + 2f;
+            Link.Open(target);
         }
 
         internal void Interact()
@@ -752,7 +771,7 @@ namespace HeavyPockets
             if (!HasOwnPose || extracted || disconnected || screen != RaidScreen.Play) return;
             var passage = WorldMechanisms.Closest(OwnPosition, OwnMotion);
             if (passage != null) Link.SetMechanism(passage.Id, !passage.IsOpen);
-            else if (RaidContainers.Closest(OwnPosition, OwnMotion, out byte target)) Link.Open(target);
+            else if (RaidContainers.Closest(OwnPosition, OwnMotion, out byte target)) RequestOpen(target);
             else Link.Open();
         }
 

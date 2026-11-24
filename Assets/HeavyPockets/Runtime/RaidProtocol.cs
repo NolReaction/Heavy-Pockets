@@ -42,8 +42,8 @@ namespace HeavyPockets
     // the fields for its own kind. Public poses cannot serialize any inventory fields.
     internal static class RaidWire
     {
-        public const string Commands = "heavypockets.command.v14";
-        public const string Events = "heavypockets.event.v14";
+        public const string Commands = "heavypockets.command.v15";
+        public const string Events = "heavypockets.event.v15";
         private const int ResultCapacity = LootCatalog.BagCapacity + GearCatalog.Slots - 1;
         private const int MaxPayload = 3 + ResultCapacity * 8;
 
@@ -165,7 +165,7 @@ namespace HeavyPockets
                     {
                         int offset = 2 + 5 * (i - 1);
                         Buffer.BlockCopy(BitConverter.GetBytes(message.Gear[i].Id), 0, bytes, offset, 4);
-                        bytes[offset + 4] = message.Gear[i].Type;
+                        bytes[offset + 4] = (byte)(message.Gear[i].Type | (message.Gear[i].Rotated ? 0x80 : 0));
                     }
                     break;
                 case RaidEventKind.Status:
@@ -297,12 +297,18 @@ namespace HeavyPockets
                     {
                         int offset = 2 + 5 * (i - 1);
                         uint id = BitConverter.ToUInt32(bytes, offset);
-                        byte type = bytes[offset + 4];
+                        byte flags = bytes[offset + 4];
+                        byte type = (byte)(flags & 0x7f);
+                        var slot = (GearLocation)i;
+                        bool rotated = (flags & 0x80) != 0;
+                        if (rotated && (id == 0 || !GearCatalog.IsPouchCell(slot))) return false;
                         if (id == 0 && type == 0) continue;
                         if (id == 0 || !GearCatalog.Accepts((GearLocation)i, type) ||
                             !GearCatalog.Available((GearLocation)i, message.Gear)) return false;
                         for (int j = 1; j < i; j++) if (message.Gear[j].Id == id) return false;
-                        message.Gear[i] = new LootItem { Id = id, Type = type };
+                        var item = new LootItem { Id = id, Type = type, Rotated = rotated };
+                        if (GearCatalog.IsPouchCell(slot) && !GearCatalog.FitsPouch(slot, item, message.Gear)) return false;
+                        message.Gear[i] = item;
                     }
                     message.ActiveGear = (GearLocation)bytes[1];
                     return bytes[1] == 0 || (GearCatalog.Selectable(message.ActiveGear) && message.Gear[bytes[1]].Id != 0);

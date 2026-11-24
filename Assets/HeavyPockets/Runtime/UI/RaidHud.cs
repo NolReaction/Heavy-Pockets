@@ -31,6 +31,7 @@ namespace HeavyPockets
         private static readonly Color Amber = new Color32(255, 190, 94, 255);
         private static readonly Color Mint = new Color32(119, 230, 187, 255);
         private GUIStyle label;
+        private readonly GUIContent labelContent = new GUIContent();
 
         internal void Draw(State state)
         {
@@ -163,7 +164,11 @@ namespace HeavyPockets
             label.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
             label.normal.textColor = color;
             label.alignment = alignment;
-            GUI.Label(new Rect(x, y, width, height), value, label);
+            if (Event.current.type == EventType.Repaint)
+            {
+                labelContent.text = value;
+                label.Draw(new Rect(x, y, width, height), labelContent, false, false, false, false);
+            }
         }
 
         private static void Stroke(float x1, float y1, float x2, float y2, float thickness, Color col)

@@ -17,15 +17,13 @@ namespace HeavyPockets
         }
 
         private static readonly Node[] nodes;
+        private static Node[] placed = Array.Empty<Node>();
         private static readonly Bounds[] cameraGlass;
         private static readonly Bounds glazingBounds;
 
         static YardOcclusion()
         {
-            var boxes = (Bounds[])OutdoorLayout.Occluders.Clone();
-            nodes = new Node[Math.Max(0, boxes.Length * 2 - 1)];
-            int next = 0;
-            if (boxes.Length > 0) Build(boxes, 0, boxes.Length, ref next);
+            nodes = Index(OutdoorLayout.Occluders);
             cameraGlass = (Bounds[])ChartHouseLayout.Glazing.Clone();
             Bounds envelope = default;
             for (int i = 0; i < cameraGlass.Length; i++)
@@ -38,7 +36,19 @@ namespace HeavyPockets
             glazingBounds = envelope;
         }
 
-        private static int Build(Bounds[] boxes, int start, int count, ref int next)
+        internal static void IndexPlan(Bounds[] walls) => placed = Index(walls);
+
+        private static Node[] Index(Bounds[] source)
+        {
+            if (source.Length == 0) return Array.Empty<Node>();
+            var boxes = (Bounds[])source.Clone();
+            var tree = new Node[boxes.Length * 2 - 1];
+            int next = 0;
+            Build(tree, boxes, 0, boxes.Length, ref next);
+            return tree;
+        }
+
+        private static int Build(Node[] tree, Bounds[] boxes, int start, int count, ref int next)
         {
             int index = next++;
             Bounds bounds = boxes[start];
@@ -52,10 +62,10 @@ namespace HeavyPockets
                 int axis = bounds.size.x >= bounds.size.z ? 0 : 2;
                 Array.Sort(boxes, start, count, Comparer<Bounds>.Create((a, b) => a.center[axis].CompareTo(b.center[axis])));
                 int split = count / 2;
-                node.Left = Build(boxes, start, split, ref next);
-                node.Right = Build(boxes, start + split, count - split, ref next);
+                node.Left = Build(tree, boxes, start, split, ref next);
+                node.Right = Build(tree, boxes, start + split, count - split, ref next);
             }
-            nodes[index] = node;
+            tree[index] = node;
             return index;
         }
 
@@ -68,20 +78,22 @@ namespace HeavyPockets
 
         internal static bool BlocksStaticSight(Vector3 origin, Vector3 segment)
         {
+            float length = 1f;
+            if (placed.Length > 0 && Trace(placed, 0, origin, segment, ref length, false)) return true;
             if (TrainingGround.Active)
             {
                 foreach (Bounds box in TrainingLayout.Opaque)
                     if (RaidMap.Intersects(box, origin, segment, 1f, out _)) return true;
                 return false;
             }
-            float length = 1f;
-            return nodes.Length > 0 && Trace(0, origin, segment, ref length, false);
+            return nodes.Length > 0 && Trace(nodes, 0, origin, segment, ref length, false);
         }
 
         internal static float ClipCamera(Vector3 origin, Vector3 direction, float length)
         {
             foreach (var passage in WorldMechanisms.Active)
                 if (passage.Trace(origin, direction, length, RaidCameraBoom.Clearance, out float hit)) length = hit;
+            if (placed.Length > 0) Trace(placed, 0, origin, direction, ref length, true);
             if (TrainingGround.Active)
             {
                 foreach (Bounds solid in TrainingLayout.Collision)
@@ -92,16 +104,16 @@ namespace HeavyPockets
                 }
                 return length;
             }
-            if (length > 0 && nodes.Length > 0) Trace(0, origin, direction, ref length, true);
+            if (length > 0 && nodes.Length > 0) Trace(nodes, 0, origin, direction, ref length, true);
             if (length > 0 && cameraGlass.Length > 0 && RaidMap.Intersects(glazingBounds, origin, direction, length, out _))
                 foreach (Bounds pane in cameraGlass)
                     if (RaidMap.Intersects(pane, origin, direction, length, out float first)) length = first;
             return length;
         }
 
-        private static bool Trace(int index, Vector3 origin, Vector3 direction, ref float length, bool camera)
+        private static bool Trace(Node[] tree, int index, Vector3 origin, Vector3 direction, ref float length, bool camera)
         {
-            ref readonly Node node = ref nodes[index];
+            ref readonly Node node = ref tree[index];
             if (!RaidMap.Intersects(camera ? node.Camera : node.Solid, origin, direction, length, out float first))
                 return false;
             if (node.Leaf)
@@ -109,9 +121,9 @@ namespace HeavyPockets
                 length = first;
                 return true;
             }
-            bool hit = Trace(node.Left, origin, direction, ref length, camera);
+            bool hit = Trace(tree, node.Left, origin, direction, ref length, camera);
             if (hit && (!camera || length == 0f)) return true;
-            return Trace(node.Right, origin, direction, ref length, camera) || hit;
+            return Trace(tree, node.Right, origin, direction, ref length, camera) || hit;
         }
     }
 }

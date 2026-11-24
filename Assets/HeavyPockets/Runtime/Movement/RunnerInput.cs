@@ -15,6 +15,10 @@ namespace HeavyPockets
             return new Vector2(world.x, world.z);
         }
 
+        // A modifier held across the closing frame belongs to the inventory until key-up.
+        internal static bool ConsumeInventoryControl(bool held, bool inventory, bool consumed) =>
+            held && (inventory || consumed);
+
         internal static MoveButtons Buttons(bool jump)
         {
             var buttons = jump ? MoveButtons.Jump : MoveButtons.None;

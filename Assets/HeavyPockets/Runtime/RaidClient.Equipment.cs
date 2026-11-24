@@ -33,7 +33,9 @@ namespace HeavyPockets
         private void SelectEquipment(GearLocation slot)
         {
             if (!HasOwnPose || disconnected || extracted || screen != RaidScreen.Play || !GearCatalog.Selectable(slot)) return;
-            var selected = InventoryState().Gear[(int)slot];
+            var gear = InventoryState().Gear;
+            slot = GearCatalog.PouchOwner(slot, gear);
+            var selected = gear[(int)slot];
             if (selected.Id == 0) return;
             if (inventoryOpen) hud.FocusGear(slot, selected);
             Link.SelectGear(slot);
@@ -61,7 +63,7 @@ namespace HeavyPockets
         internal void RequestGearMove(uint id, GearLocation from, GearLocation to, int x = -1, int y = -1, bool rotated = false)
         {
             if (!inventoryOpen || !HasOwnPose || disconnected || extracted || screen != RaidScreen.Play ||
-                id == 0 || from == to ||
+                id == 0 ||
                 (!GearCatalog.IsSlot(from) && !GearCatalog.IsSlot(to)) ||
                 (byte)from > (byte)GearLocation.Crate || (byte)to > (byte)GearLocation.Crate ||
                 ((from == GearLocation.Crate || to == GearLocation.Crate) && !crateOpen)) return;
@@ -72,7 +74,7 @@ namespace HeavyPockets
                 Array.Find(from == GearLocation.Bag ? current.BagItems : current.CrateItems, i => i.Id == id);
             if (source.Id != id) return;
             if (from == GearLocation.Pouch || to == GearLocation.Pouch) return;
-            if (GearCatalog.IsSlot(to)) { x = y = -1; rotated = false; }
+            if (GearCatalog.IsSlot(to)) { x = y = -1; if (!GearCatalog.IsPouchCell(to)) rotated = false; }
             var status = GearCatalog.PlanMove(source, from, to, x, y, rotated, current.BagItems, current.CrateItems,
                 current.Gear, current.Unknown, out var target, out var displaced);
             if (status != RaidStatus.Placed) return;

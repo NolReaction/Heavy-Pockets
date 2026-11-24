@@ -7,11 +7,6 @@ namespace HeavyPockets
     {
         internal const float Cell = 32f;
         private const float Side = 9f;
-        private static readonly Color Surface = new Color32(30, 47, 49, 255);
-        private static readonly Color EmptyCell = new Color32(32, 46, 48, 255);
-        private static readonly Color Unsearched = new Color32(48, 58, 59, 255);
-        private static readonly Color GridLine = new Color32(85, 100, 98, 255);
-        private static readonly Color FieldLabel = new Color32(205, 211, 191, 255);
         private static readonly Color Bad = new Color32(255, 139, 113, 255);
 
         private readonly Func<bool, uint, uint> quickTransfer;
@@ -222,7 +217,7 @@ namespace HeavyPockets
                 held, bag, x, y, rotated, bag ? null : state.Unknown, GearCatalog.BagRows(state.Gear));
         }
 
-        private bool HandlePointer(State state, Board board, Vector2 p, EventType type, bool ctrl, bool doubleClick)
+        private bool HandlePointer(State state, Board board, Vector2 p, EventType type, bool ctrl, bool doubleClick, bool alt = false)
         {
             ObservePointer(state, board, p, type == EventType.MouseDown || type == EventType.MouseMove);
             if (state.WorldLook || (type == EventType.MouseDown && !board.InPanel(p))) return false;
@@ -241,7 +236,9 @@ namespace HeavyPockets
                 if (clicked.Id == 0) return false;
                 selectedId = clicked.Id;
                 sourceBag = bag;
-                if ((ctrl || doubleClick) && state.Crate)
+                if (alt)
+                    AutoEquip(state, clicked, bag ? GearLocation.Bag : GearLocation.Crate);
+                else if ((ctrl || doubleClick) && state.Crate)
                     QueueTransfer(bag, clicked.Id);
                 else
                 {
@@ -279,13 +276,13 @@ namespace HeavyPockets
         }
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
-        internal bool ProbePointer(State state, bool bag, float column, float row, EventType type, bool ctrl)
+        internal bool ProbePointer(State state, bool bag, float column, float row, EventType type, bool ctrl, bool alt = false)
         {
             var board = GetBoard(state, out _);
             Rect grid = bag ? board.Bag : board.Crate;
             scriptedPointer = true;
             var point = grid.position + new Vector2(column, row) * Cell;
-            return HandlePointer(state, board, point, type, ctrl, false);
+            return HandlePointer(state, board, point, type, ctrl, false, alt);
         }
 
         internal bool ProbeTargetCell(State state, bool bag, int x, int y, EventType type)
@@ -337,80 +334,44 @@ namespace HeavyPockets
             if (ev.type != EventType.Repaint)
             {
                 if (!Application.isFocused) return;
+                if (!IsHoldingItem && HandleStylePointer(b, actual, ev)) { ev.Use(); return; }
                 if (ev.type == EventType.MouseDown && ev.button == 1 && CancelDrag()) { ev.Use(); return; }
                 if (ev.button == 0 && (ev.type == EventType.MouseDown || ev.type == EventType.MouseDrag || ev.type == EventType.MouseUp))
                 {
                     scriptedPointer = false;
-                    if (HandlePointer(state, b, actual, ev.type, ev.control, ev.clickCount >= 2)) ev.Use();
+                    if (HandlePointer(state, b, actual, ev.type, ev.control, ev.clickCount >= 2, ev.alt)) ev.Use();
                 }
                 return;
             }
             if (!scriptedPointer)
                 ObservePointer(state, b, actual, false);
             GUI.color = Fade(GUI.color, Mathf.Lerp(.12f, 1f, opening));
-            if (state.Crate) DrawInventoryPanel(b.ChestPanel, "Ящик", Oxide);
-            DrawInventoryPanel(b.BagPanel, "Инвентарь", DeepTeal);
-            DrawInventoryPanel(b.EquipmentPanel, "Снаряжение", Umber);
+            if (state.Crate) DrawInventoryPanel(b.ChestPanel, "Ящик");
+            DrawInventoryPanel(b.BagPanel, "Инвентарь");
+            DrawInventoryPanel(b.EquipmentPanel, "Снаряжение");
             ValidateGearSelection(state);
             DrawGear(state, b);
             DrawContainer(state, b, true);
             if (state.Crate) DrawContainer(state, b, false);
             DrawClose(b.Close);
+            DrawStyleTab(b);
             DrawItemCard(state, b, screenWidth, screenHeight);
             if (dragging && held.Id != 0) DrawGhost(b, state);
         }
 
-        private static readonly Color ManifestPaper = new Color32(230, 213, 176, 255);
-        private static readonly Color LockedCell = new Color32(24, 35, 37, 255);
-        private static readonly Color PrintInk = new Color32(29, 48, 52, 255);
-        private static readonly Color Umber = new Color32(103, 78, 55, 255);
-        private static readonly Color Oxide = new Color32(158, 73, 47, 255);
-        private static readonly Color DeepTeal = new Color32(52, 89, 84, 255);
         private static Texture2D hatchTexture;
-        private static Texture2D inkWashes;
-        private static readonly Texture2D[] itemGradients = new Texture2D[4];
-        private GUIStyle headline;
 
-        // The paper occupies the first swatch of the original print texture.
-        private static void DrawPaper(Rect rect)
-        {
-            if (inkWashes == null) inkWashes = Resources.Load<Texture2D>("InventoryInkWashes");
-            if (inkWashes == null) { Fill(rect, ManifestPaper); return; }
-            var uv = new Rect(2f / 768f, 258f / 512f, 252f / 768f, 252f / 512f);
-            GUI.DrawTextureWithTexCoords(rect, inkWashes, uv, true);
-        }
+        private static void DrawPaper(Rect rect) => Fill(rect, Palette.Panel);
 
-        private static void ItemWash(Rect rect, byte type)
+        private void DrawInventoryPanel(Rect r, string title)
         {
-            int tier = (int)LootCatalog.Rarity(type);
-            Color ink = RarityColor(type);
-            if (itemGradients[tier] == null)
-            {
-                var gradient = new Texture2D(2, 2, TextureFormat.RGB24, false) {
-                    wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave };
-                gradient.SetPixels(new[] { Color.Lerp(EmptyCell, ink, .12f), EmptyCell,
-                    Color.Lerp(EmptyCell, ink, .22f), Color.Lerp(EmptyCell, ink, .06f) });
-                gradient.Apply(false, true);
-                itemGradients[tier] = gradient;
-            }
-            GUI.DrawTextureWithTexCoords(rect, itemGradients[tier], new Rect(.25f, .25f, .5f, .5f), true);
-            Block(rect.x + 1, rect.yMax - 2, Mathf.Min(20f, rect.width - 2), 1f, ink);
-        }
-
-        private void DrawInventoryPanel(Rect r, string title, Color ink)
-        {
-            Block(r.x + 2, r.y + 3, r.width, r.height, new Color32(13, 23, 23, 125));
+            Block(r.x + 2, r.y + 3, r.width, r.height, new Color32(9, 15, 20, 120));
             DrawPaper(r);
-            Block(r.x, r.y, r.width, 2, ink);
-            Block(r.x + Side, r.y + 30, r.width - 2 * Side, 1, Fade(ink, .54f));
-            if (headline == null)
-            {
-                var font = Font.CreateDynamicFontFromOSFont(new[] { "Georgia", "Times New Roman" }, 24);
-                headline = new GUIStyle(label) { font = font, fontStyle = FontStyle.Bold, fontSize = 17,
-                    wordWrap = false, alignment = TextAnchor.MiddleLeft };
-            }
-            headline.normal.textColor = PrintInk;
-            GUI.Label(new Rect(r.x + Side, r.y + 2, r.width - Side * 2, 27), title, headline);
+            Outline(r, Color.Lerp(Palette.Panel, Palette.Text, .23f), 1);
+            Block(r.x + 1, r.y + 1, r.width - 2, 29, Palette.Header);
+            Block(r.x + Side, r.y + 29, r.width - Side * 2, 1, Color.Lerp(Palette.Header, Palette.Text, .22f));
+            Block(r.x + Side, r.y + 29, 17, 1, Palette.Accent);
+            Text(r.x + Side, r.y + 1, r.width - 2 * Side, 27, title, 17, PrintInk, true);
         }
 
         private void DrawClose(Rect r)
@@ -450,17 +411,6 @@ namespace HeavyPockets
 
         private static void Fill(Rect r, Color color) => Block(r.x, r.y, r.width, r.height, color);
 
-        private static Color RarityColor(byte type)
-        {
-            switch (LootCatalog.Rarity(type))
-            {
-                case LootRarity.Rare: return new Color32(139, 213, 225, 255);
-                case LootRarity.Epic: return new Color32(226, 173, 220, 255);
-                case LootRarity.Legendary: return new Color32(255, 207, 123, 255);
-                default: return new Color32(201, 210, 183, 255);
-            }
-        }
-
         private bool HoveredFootprint(State state, Board board, out LootFootprint shape)
         {
             shape = default;
@@ -486,7 +436,7 @@ namespace HeavyPockets
         private void DrawContainer(State state, Board board, bool bag)
         {
             Rect grid = bag ? board.Bag : board.Crate;
-            Fill(grid, new Color32(57, 70, 70, 255));
+            Fill(grid, Palette.Grid);
             int cols = bag ? LootCatalog.BagWidth : LootCatalog.CrateWidth;
             int rows = bag ? LootCatalog.BagHeight : LootCatalog.CrateHeight;
             int usableRows = bag ? GearCatalog.BagRows(state.Gear) : rows;

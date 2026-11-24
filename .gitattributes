@@ -7,6 +7,7 @@
 # Unity native mesh subassets use binary serialization, even with a .asset extension.
 Assets/HeavyPockets/Resources/PortCells/*.asset binary !eol
 Assets/HeavyPockets/Resources/PortHorizon.asset binary !eol
+Assets/HeavyPockets/Resources/MapKits/*.asset binary !eol
 *.exr binary
 *.ps1 text eol=crlf
 *.cmd text eol=crlf

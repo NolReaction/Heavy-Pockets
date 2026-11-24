@@ -64,9 +64,9 @@ namespace HeavyPockets
                     TickRate = 30,
                     ConnectionApproval = true,
 #if HEAVY_POCKETS_EOS
-                    ProtocolVersion = 32
+                    ProtocolVersion = 34
 #else
-                    ProtocolVersion = 31
+                    ProtocolVersion = 33
 #endif
                 };
 #if HEAVY_POCKETS_EOS

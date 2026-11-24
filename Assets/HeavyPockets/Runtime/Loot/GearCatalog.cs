@@ -14,6 +14,43 @@ namespace HeavyPockets
 
         public static string Name(GearLocation slot) => (byte)slot < Names.Length ? Names[(int)slot] : "";
         public static bool IsSlot(GearLocation slot) => slot >= GearLocation.Primary && slot < GearLocation.Crate;
+        public static bool IsPouchCell(GearLocation slot) => slot >= GearLocation.PouchCell && slot <= GearLocation.PouchCell4;
+        public const int PouchWidth = 2;
+
+        // A pouch item lives at its top-left cell. The other covered cells reference
+        // that same instance through its footprint, including when a quick key is used.
+        public static GearLocation PouchOwner(GearLocation cell, LootItem[] gear)
+        {
+            if (!IsPouchCell(cell) || gear == null || gear.Length != Slots) return cell;
+            int bit = 1 << (cell - GearLocation.PouchCell);
+            for (var slot = GearLocation.PouchCell; slot <= GearLocation.PouchCell4; slot++)
+                if (gear[(int)slot].Id != 0 && (PouchMask(slot, gear[(int)slot]) & bit) != 0) return slot;
+            return cell;
+        }
+
+        private static int PouchMask(GearLocation slot, LootItem item)
+        {
+            int index = slot - GearLocation.PouchCell;
+            int x = index % PouchWidth, y = index / PouchWidth;
+            int width = LootCatalog.Width(item.Type, item.Rotated), height = LootCatalog.Height(item.Type, item.Rotated);
+            if (x + width > PouchWidth || y + height > 2) return 0;
+            int row = ((1 << width) - 1) << index;
+            return height == 2 ? row | (row << PouchWidth) : row;
+        }
+
+        public static bool FitsPouch(GearLocation slot, LootItem item, LootItem[] gear, uint vacated = 0)
+        {
+            if (!IsPouchCell(slot) || !Accepts(slot, item.Type)) return false;
+            int mask = PouchMask(slot, item);
+            if (mask == 0 || (mask >> PouchLevel(gear)) != 0) return false;
+            for (var other = GearLocation.PouchCell; other <= GearLocation.PouchCell4; other++)
+            {
+                var existing = gear[(int)other];
+                if (existing.Id != 0 && existing.Id != item.Id && existing.Id != vacated &&
+                    (PouchMask(other, existing) & mask) != 0) return false;
+            }
+            return true;
+        }
         public static bool Selectable(GearLocation slot) => slot == GearLocation.Primary || slot == GearLocation.Secondary ||
             slot == GearLocation.PouchCell || slot == GearLocation.PouchCell2;
 
@@ -49,9 +86,7 @@ namespace HeavyPockets
                 case GearLocation.Armor: return type == Armor;
                 case GearLocation.Backpack: return type == FieldPack || type == ExpeditionPack;
                 case GearLocation.Pouch: return type >= FirstPouch && type < FirstPouch + 4;
-                default: return slot >= GearLocation.PouchCell && slot <= GearLocation.PouchCell4 &&
-                    (type <= LootCatalog.RandomTypeCount || type >= LootCatalog.FoldingRule) &&
-                    LootCatalog.Width(type, false) * LootCatalog.Height(type, false) <= 2;
+                default: return IsPouchCell(slot) && (type <= LootCatalog.RandomTypeCount || type >= LootCatalog.FoldingRule);
             }
         }
 
@@ -64,17 +99,23 @@ namespace HeavyPockets
             target = item;
             displaced = default;
             bool fromSlot = IsSlot(from), toSlot = IsSlot(to);
-            if (item.Id == 0 || from == to || (!fromSlot && !toSlot) || !Available(from, gear) || !Available(to, gear) ||
+            if (item.Id == 0 || (from == to && !(IsPouchCell(to) && item.Rotated != rotated)) ||
+                (!fromSlot && !toSlot) || !Available(from, gear) || !Available(to, gear) ||
                 from == GearLocation.Pouch || to == GearLocation.Pouch || !Accepts(to, item.Type)) return RaidStatus.Denied;
 
             int rows = BagRows(gear);
             if (toSlot)
             {
                 if (x != -1 || y != -1) return RaidStatus.Denied;
-                displaced = gear[(int)to];
+                if (from != to) displaced = gear[(int)to];
                 if (displaced.Id != 0 && !Accepts(from, displaced.Type)) return RaidStatus.Denied;
                 target.X = target.Y = 0;
-                target.Rotated = false;
+                target.Rotated = IsPouchCell(to) && rotated;
+                if (IsPouchCell(to) && !FitsPouch(to, target, gear, displaced.Id)) return RaidStatus.NoSpace;
+                if (IsPouchCell(from) && displaced.Id != 0 &&
+                    (!FitsPouch(from, displaced, gear, item.Id) ||
+                    (IsPouchCell(to) && (PouchMask(from, displaced) & PouchMask(to, target)) != 0)))
+                    return RaidStatus.NoSpace;
             }
             if (from == GearLocation.Backpack || to == GearLocation.Backpack)
             {
