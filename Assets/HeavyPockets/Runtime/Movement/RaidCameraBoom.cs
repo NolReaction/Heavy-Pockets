@@ -114,8 +114,11 @@ namespace HeavyPockets
             length = LimitAxis(eye.z, direction.z, -zLimit, zLimit, length);
             if (direction.y < -0.00001f)
                 length = Mathf.Min(length, (Clearance + .04f - eye.y) / direction.y);
-            if (RaidMap.Intersects(Partition, eye, direction, length, out float wall)) length = wall;
-            if (RaidMap.Intersects(Cargo, eye, direction, length, out float crate)) length = crate;
+            if (!TrainingGround.Active)
+            {
+                if (RaidMap.Intersects(Partition, eye, direction, length, out float wall)) length = wall;
+                if (RaidMap.Intersects(Cargo, eye, direction, length, out float crate)) length = crate;
+            }
             length = YardOcclusion.ClipCamera(eye, direction, length);
             return Mathf.Max(0f, length);
         }

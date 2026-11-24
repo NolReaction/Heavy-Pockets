@@ -267,8 +267,9 @@ namespace HeavyPockets
                 case RaidEventKind.RaidStarted:
                     StartRound(e.Round);
                     break;
-                case RaidEventKind.WarehouseDoor:
-                    WarehouseDoor.SetOpen(e.DoorOpen);
+                case RaidEventKind.Mechanism:
+                    if (WorldMechanisms.TryGet(e.MechanismId, out var passage))
+                        passage.SetMotion(e.FromSide, e.TargetSide, e.StartedAt);
                     break;
                 case RaidEventKind.ScaleLoad:
                     ScaleKilograms = e.ScaleKilograms;
@@ -633,7 +634,7 @@ namespace HeavyPockets
                     if (Input.GetMouseButtonDown(1))
                         inventoryLooking = !hud.IsHoldingItem && !hud.PointerOverInventory(InventoryState());
                     if (!Input.GetMouseButton(1)) inventoryLooking = false;
-                    if (inventoryLooking) ReadMouseLook();
+                    if (inventoryLooking) RunnerInput.Look(ref yaw, ref pitch);
                     if (crateOpen)
                         hud.PhysicalTransferInput(InventoryState(), Input.GetKeyDown(KeyCode.F), Input.GetKey(KeyCode.F));
                     if (Input.GetKeyDown(KeyCode.R))
@@ -655,7 +656,7 @@ namespace HeavyPockets
                     if (Input.GetMouseButtonDown(0)) CaptureCursor();
                     if (Cursor.lockState == CursorLockMode.Locked)
                     {
-                        ReadMouseLook();
+                        RunnerInput.Look(ref yaw, ref pitch);
                         if (Input.GetKeyDown(KeyCode.E)) Interact();
                     }
                 }
@@ -667,17 +668,8 @@ namespace HeavyPockets
             bool crouchPressed = control && (Input.GetKeyDown(KeyCode.LeftControl) || Input.GetKeyDown(KeyCode.RightControl));
             if (crouchPressed || jumpPending || Time.unscaledTime >= nextSend)
             {
-                var keys = new Vector2(
-                    (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f),
-                    (Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f));
-                Vector2 direction = MovementFromKeys(keys, Application.isFocused, Cursor.lockState == CursorLockMode.Locked);
-                MoveButtons buttons = MoveButtons.None;
-                if (control)
-                {
-                    if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) buttons |= MoveButtons.Sprint;
-                    if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) buttons |= MoveButtons.Crouch;
-                    if (jumpPending) buttons |= MoveButtons.Jump;
-                }
+                Vector2 direction = MovementFromKeys(RunnerInput.Keys(), Application.isFocused, Cursor.lockState == CursorLockMode.Locked);
+                MoveButtons buttons = control ? RunnerInput.Buttons(jumpPending) : MoveButtons.None;
                 SendMovement(direction, buttons);
                 jumpPending = false;
             }
@@ -686,23 +678,16 @@ namespace HeavyPockets
         internal void Interact()
         {
             if (!HasOwnPose || extracted || disconnected || screen != RaidScreen.Play) return;
-            if (WarehouseDoor.CanOperate(OwnPosition, OwnMotion)) Link.SetWarehouseDoor(!WarehouseDoor.IsOpen);
+            var passage = WorldMechanisms.Closest(OwnPosition, OwnMotion);
+            if (passage != null) Link.SetMechanism(passage.Id, !passage.IsOpen);
             else Link.Open();
-        }
-
-        private void ReadMouseLook()
-        {
-            yaw = Mathf.Repeat(yaw + Input.GetAxisRaw("Mouse X") * 2.1f, 360f);
-            pitch = Mathf.Clamp(pitch - Input.GetAxisRaw("Mouse Y") * 2.1f, -RaidCameraBoom.MaxPitch, RaidCameraBoom.MaxPitch);
         }
 
         internal Vector2 MovementFromKeys(Vector2 keys, bool focused, bool cursorLocked)
         {
             if (!focused || !HasOwnPose || extracted || disconnected || screen != RaidScreen.Play ||
                 (!cursorLocked && !inventoryOpen)) return Vector2.zero;
-            keys = Vector2.ClampMagnitude(keys, 1f);
-            var world = Quaternion.Euler(0, yaw, 0) * new Vector3(keys.x, 0, keys.y);
-            return new Vector2(world.x, world.z);
+            return RunnerInput.WorldDirection(keys, yaw);
         }
 
         private void OnGUI()

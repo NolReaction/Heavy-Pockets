@@ -19,6 +19,13 @@ namespace HeavyPockets
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Launch()
         {
+#if UNITY_EDITOR
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().path == TrainingGround.ScenePath)
+            {
+                TrainingGround.Launch();
+                return;
+            }
+#endif
             var root = new GameObject("Heavy Pockets session");
             DontDestroyOnLoad(root);
             PortCollisionWorld.Create(root.transform);
@@ -52,9 +59,9 @@ namespace HeavyPockets
                     TickRate = 30,
                     ConnectionApproval = true,
 #if HEAVY_POCKETS_EOS
-                    ProtocolVersion = 28
+                    ProtocolVersion = 30
 #else
-                    ProtocolVersion = 27
+                    ProtocolVersion = 29
 #endif
                 };
 #if HEAVY_POCKETS_EOS

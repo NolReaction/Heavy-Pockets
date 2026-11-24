@@ -65,7 +65,7 @@ namespace HeavyPockets
             this.net = net;
             this.mayPlay = mayPlay;
             this.pairedSpawn = pairedSpawn;
-            WarehouseDoor.SetOpen(false);
+            WorldMechanisms.Reset();
             audit = RaidAudit.Open(auditPath);
             net.CustomMessagingManager.RegisterNamedMessageHandler(RaidWire.Commands, OnCommand);
             net.OnClientConnectedCallback += ActivatePlayer;
@@ -124,7 +124,7 @@ namespace HeavyPockets
             players[id] = player;
             loot.IssueKit(id, player.PouchLevel);
             Send(id, new RaidEvent { Kind = RaidEventKind.RaidStarted, Round = round });
-            Send(id, new RaidEvent { Kind = RaidEventKind.WarehouseDoor, DoorOpen = WarehouseDoor.IsOpen });
+            foreach (var passage in WorldMechanisms.Active) Send(id, PassageState(passage));
             Send(id, Pose(player));
             SendGear(player);
             SendInventory(player, RaidEventKind.Bag);
@@ -151,7 +151,7 @@ namespace HeavyPockets
             // Every result has already been sent. Retire the shared ledger once,
             // even if nobody has pressed the next-raid button yet.
             loot = new RaidLoot();
-            WarehouseDoor.SetOpen(false);
+            WorldMechanisms.Reset();
             nextSlot = 0;
             round = round == uint.MaxValue ? 1 : round + 1;
             var ready = new List<Player>(players.Count);
@@ -245,12 +245,13 @@ namespace HeavyPockets
                 GearCommand(player, command, bytes);
                 return;
             }
-            if (command == RaidCommand.SetWarehouseDoor)
+            if (command == RaidCommand.SetMechanism)
             {
-                if (!player.Exited && bytes.Length == 2 && bytes[1] <= 1 && player.ActionCredits >= 1f)
+                if (!player.Exited && bytes.Length == 3 && WorldMechanisms.TryGet(bytes[1], out var passage) &&
+                    bytes[2] <= 1 && player.ActionCredits >= 1f)
                 {
                     player.ActionCredits -= 1f;
-                    SetWarehouseDoor(player, bytes[1] != 0);
+                    SetMechanism(player, passage, bytes[2] != 0);
                 }
                 return;
             }
@@ -342,15 +343,22 @@ namespace HeavyPockets
             player.InputLeft = InputLifetime;
         }
 
-        private void SetWarehouseDoor(Player operatorPlayer, bool open)
+        private static RaidEvent PassageState(WorldMechanism passage) => new RaidEvent
         {
-            if (open == WarehouseDoor.IsOpen || !WarehouseDoor.CanOperate(operatorPlayer.Position, operatorPlayer.Motion))
-                return;
-            foreach (var player in players.Values)
-                if (!player.Exited && WarehouseDoor.SweepsPlayer(player.Position, player.Motion)) return;
+            Kind = RaidEventKind.Mechanism, MechanismId = passage.Id, FromSide = passage.From,
+            TargetSide = passage.Target, StartedAt = passage.Started
+        };
 
-            WarehouseDoor.SetOpen(open);
-            var state = new RaidEvent { Kind = RaidEventKind.WarehouseDoor, DoorOpen = open };
+        private void SetMechanism(Player operatorPlayer, WorldMechanism passage, bool open)
+        {
+            if (passage.Moving || open == passage.IsOpen ||
+                passage != WorldMechanisms.Closest(operatorPlayer.Position, operatorPlayer.Motion)) return;
+            int target = passage.NextTarget(operatorPlayer.Position);
+            foreach (var player in players.Values)
+                if (!player.Exited && passage.Sweeps(player.Position, player.Motion, target)) return;
+            if (passage.ObstructedByBody(target)) return;
+            passage.SetMotion(passage.Target, target, WorldMechanisms.Now);
+            var state = PassageState(passage);
             foreach (var player in players.Values)
                 if (!player.Exited) Send(player.Id, state);
         }

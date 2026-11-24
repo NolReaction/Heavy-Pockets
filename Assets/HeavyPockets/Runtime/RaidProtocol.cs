@@ -7,9 +7,9 @@ using UnityEngine;
 
 namespace HeavyPockets
 {
-    public enum RaidEventKind : byte { Pose = 1, Left, Crate, Bag, Result, Status, ExitProgress, RaidStarted, RaidQueue, Gear, PouchLevel, WarehouseDoor, ScaleLoad }
+    public enum RaidEventKind : byte { Pose = 1, Left, Crate, Bag, Result, Status, ExitProgress, RaidStarted, RaidQueue, Gear, PouchLevel, Mechanism, ScaleLoad }
     public enum RaidStatus : byte { Opened = 1, Blocked, Closed, Taken, Empty, Denied, OutOfRange, AlreadyExited, CrateLost, Stored, BagFull, Placed, NoSpace, Stale }
-    internal enum RaidCommand : byte { Move = 1, Open, Close, Take, Store, Place, NextRaid, EnterRaid, MoveGear, SelectGear, SetPouchLevel, EnterBase, SetWarehouseDoor }
+    internal enum RaidCommand : byte { Move = 1, Open, Close, Take, Store, Place, NextRaid, EnterRaid, MoveGear, SelectGear, SetPouchLevel, EnterBase, SetMechanism }
 
     public struct RaidEvent
     {
@@ -28,7 +28,9 @@ namespace HeavyPockets
         public uint Operation;
         public uint Round;
         public bool Queued;
-        public bool DoorOpen;
+        public byte MechanismId;
+        public int FromSide, TargetSide;
+        public double StartedAt;
         public byte ScaleKilograms;
         public byte PouchLevel;
     }
@@ -37,8 +39,8 @@ namespace HeavyPockets
     // the fields for its own kind. Public poses cannot serialize any inventory fields.
     internal static class RaidWire
     {
-        public const string Commands = "heavypockets.command.v12";
-        public const string Events = "heavypockets.event.v12";
+        public const string Commands = "heavypockets.command.v13";
+        public const string Events = "heavypockets.event.v13";
         private const int ResultCapacity = LootCatalog.BagCapacity + GearCatalog.Slots - 1;
         private const int MaxPayload = 3 + ResultCapacity * 8;
 
@@ -100,8 +102,12 @@ namespace HeavyPockets
                     bytes = new byte[9];
                     PutActor(bytes, message.Actor);
                     break;
-                case RaidEventKind.WarehouseDoor:
-                    bytes = new byte[] { 0, (byte)(message.DoorOpen ? 1 : 0) };
+                case RaidEventKind.Mechanism:
+                    bytes = new byte[12];
+                    bytes[1] = message.MechanismId;
+                    bytes[2] = (byte)(message.FromSide + 1);
+                    bytes[3] = (byte)(message.TargetSide + 1);
+                    Buffer.BlockCopy(BitConverter.GetBytes(message.StartedAt), 0, bytes, 4, sizeof(double));
                     break;
                 case RaidEventKind.ScaleLoad:
                     bytes = new byte[] { 0, message.ScaleKilograms };
@@ -206,9 +212,16 @@ namespace HeavyPockets
                 case RaidEventKind.Left when bytes.Length == 9:
                     message.Actor = BitConverter.ToUInt64(bytes, 1);
                     return true;
-                case RaidEventKind.WarehouseDoor when bytes.Length == 2 && bytes[1] <= 1:
-                    message.DoorOpen = bytes[1] != 0;
-                    return true;
+                case RaidEventKind.Mechanism when bytes.Length == 12 && WorldMechanisms.TryGet(bytes[1], out var passage):
+                    message.MechanismId = bytes[1];
+                    message.FromSide = bytes[2] - 1;
+                    message.TargetSide = bytes[3] - 1;
+                    message.StartedAt = BitConverter.ToDouble(bytes, 4);
+                    int min = passage.IsShutter ? 0 : -1;
+                    return message.FromSide >= min && message.FromSide <= 1 &&
+                        message.TargetSide >= min && message.TargetSide <= 1 &&
+                        (message.FromSide == 0 || message.TargetSide == 0) &&
+                        message.StartedAt >= 0d && !double.IsInfinity(message.StartedAt);
                 case RaidEventKind.ScaleLoad when bytes.Length == 2:
                     message.ScaleKilograms = bytes[1];
                     return bytes[1] == 0 || bytes[1] == WarehouseFloorScale.RunnerMass ||
@@ -408,8 +421,8 @@ namespace HeavyPockets
         }
 
         public void Open() => Send(new[] { (byte)RaidCommand.Open });
-        public void SetWarehouseDoor(bool open) =>
-            Send(new[] { (byte)RaidCommand.SetWarehouseDoor, (byte)(open ? 1 : 0) });
+        internal void SetMechanism(byte id, bool open) =>
+            Send(new[] { (byte)RaidCommand.SetMechanism, id, (byte)(open ? 1 : 0) });
         public void Close() => Send(new[] { (byte)RaidCommand.Close });
         public void EnterBase() => Send(new[] { (byte)RaidCommand.EnterBase });
         public void SetPouchLevel(byte level)

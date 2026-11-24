@@ -84,9 +84,28 @@ namespace HeavyPockets
                     ResourcePath = PortCellAsset.TileName(distant.Cell) };
                 cell.Proxy = InstantiateCell(distant, "Port silhouette");
                 if (cell.House) BuildChartHouseProxy(cell.Proxy.transform);
+                var warehouse = ReceivingWarehouseLayout.Origin;
+                if (distant.Cell == PortCellAsset.Key(warehouse.x, warehouse.z))
+                    MountDistantWarehouseLeaves(cell.Proxy.transform);
                 portCells.Add(cell);
             }
             TickStreaming(Vector2.zero);
+        }
+
+        private void MountDistantWarehouseLeaves(Transform parent)
+        {
+            var hinge = ReceivingWarehouseLayout.DoorHinge;
+            var leaf = Panel(parent, "Distant personnel door", hinge.x, hinge.y, hinge.z, 0);
+            float w = ReceivingWarehouseLayout.DoorWidth, h = ReceivingWarehouseLayout.DoorHeight;
+            Part(leaf, "Steel", w*.5f, h*.5f, 0, w, h, ReceivingWarehouseLayout.DoorThickness, steel);
+            WorldMechanisms.WarehouseDoor.Bind(leaf);
+
+            var bottom = ReceivingWarehouseLayout.GateBottom;
+            var shutter = Panel(parent, "Distant loading shutter", bottom.x, bottom.y, bottom.z, 0);
+            h = ReceivingWarehouseLayout.GateHeight;
+            Part(shutter, "Curtain", 0, h*.5f, 0, ReceivingWarehouseLayout.GateWidth, h,
+                ReceivingWarehouseLayout.GateThickness, teal);
+            WorldMechanisms.WarehouseGate.Bind(shutter);
         }
 
         private GameObject InstantiateCell(PortCellAsset asset, string label)
@@ -115,7 +134,9 @@ namespace HeavyPockets
                     instance.localScale *= prop.Scale;
                     if (instance.TryGetComponent<WarehouseFloorScale>(out var scale)) FloorScale = scale;
                     var door = instance.Find(ReceivingWarehouseLayout.DoorLeafName);
-                    if (door != null) door.gameObject.AddComponent<WarehouseDoor>();
+                    if (door != null) WorldMechanisms.WarehouseDoor.Bind(door);
+                    var gate = instance.Find(ReceivingWarehouseLayout.GateLeafName);
+                    if (gate != null) WorldMechanisms.WarehouseGate.Bind(gate);
                 }
             return tile;
         }

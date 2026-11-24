@@ -10,8 +10,8 @@ were dissolved, surfaces were combined, and the original base color, normal,
 metallic and roughness textures were repacked into shared 2K atlases.
 Opaque glass and paint colors were adjusted to match the port.
 
-The receiving warehouse has a cut masonry opening, a hinged service door
-and an original interior. The interior finish atlas reuses the Painted
+The receiving warehouse has two cut masonry openings, a hinged service door
+and an original rolling shutter, guides and control stations. Its interior finish atlas reuses the Painted
 Plaster Wall, Terrazzo Tiles and Wood Table 001 scans credited in
 Chart-house-surfaces.txt under CC0. The dispatch forms and signage are
 original port artwork.

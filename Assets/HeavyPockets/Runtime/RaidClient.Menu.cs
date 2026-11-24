@@ -25,7 +25,7 @@ namespace HeavyPockets
             if (!lightingLook) return;
             if (Input.GetMouseButton(1))
             {
-                ReadMouseLook();
+                RunnerInput.Look(ref yaw, ref pitch);
                 if (Time.unscaledTime < nextSend) return;
             }
             else lightingLook = false;

@@ -2,15 +2,12 @@ Shader "HeavyPockets/CoastalGround"
 {
     Properties
     {
-        _Habitat ("Material type", Float) = 0
         _Conifers ("Coastal conifer cutouts", 2D) = "white" {}
         _Plants ("Grass, scrub and pine sprays", 2D) = "white" {}
         _Bark ("Yard pine bark", 2D) = "white" {}
         _Walker ("Runner's feet", Vector) = (0,-100,0,0)
         _Cutoff ("Canopy coverage", Range(0,1)) = .32
         _Grain ("Surface detail", 2D) = "gray" {}
-        _CoastColor ("Rock, gravel and moss", 2D) = "gray" {}
-        _CoastNormals ("Ground relief", 2D) = "bump" {}
     }
     SubShader
     {
@@ -20,14 +17,12 @@ Shader "HeavyPockets/CoastalGround"
         #pragma target 3.0
         #pragma surface surf HarborDiffuse fullforwardshadows addshadow alphatest:_Cutoff vertex:vert
         #include "HarborSurfaceLighting.cginc"
-        sampler2D _Grain, _CoastColor, _CoastNormals, _Conifers, _Plants, _Bark;
+        sampler2D _Grain, _Conifers, _Plants, _Bark;
         float4 _Walker;
-        half _Habitat, _HarborPoster, _HarborDusk;
-        half4 _HarborLandColor, _HarborGrassColor;
+        half _HarborPoster, _HarborDusk;
         struct Input
         {
             float3 worldPos;
-            half slope;
             float2 cardUV;
             fixed4 color : COLOR;
         };
@@ -35,7 +30,7 @@ Shader "HeavyPockets/CoastalGround"
         {
             UNITY_INITIALIZE_OUTPUT(Input, data);
             data.cardUV = v.texcoord.xy;
-            if (_Habitat > .5 && v.color.a < .375)
+            if (v.color.a < .375)
             {
                 float3 world = mul(unity_ObjectToWorld,v.vertex).xyz;
                 float tip = saturate(v.texcoord.y);
@@ -54,64 +49,37 @@ Shader "HeavyPockets/CoastalGround"
                 v.vertex.xz += offset;
                 v.normal = normalize(float3(v.normal.x*.32,1,v.normal.z*.32));
             }
-            float3 n = normalize(v.normal);
-            float3 axis = abs(n.x) < .96 ? float3(1,0,0) : float3(0,0,1);
-            v.tangent = float4(normalize(axis - n * dot(axis,n)), -1);
-            data.slope = saturate((1 - n.y) * 2.8);
         }
         void surf(Input i, inout SurfaceOutput o)
         {
             float2 uv = i.worldPos.xz;
             half broad = tex2D(_Grain, uv * .012).r;
-            half grassy = i.color.g;
-            half tone = i.color.r;
-            half pattern = broad;
-            half3 color;
+            half3 color = i.color.rgb;
             o.Alpha = 1;
-            if (_Habitat < .5)
+            if (i.color.a < .125)
             {
-                half grain = tex2D(_Grain, uv * .39).r;
-                half middle = tex2D(_Grain, uv * .065).r;
-                pattern = broad * .5 + grain * .18 + middle * .32;
-                half coverage = smoothstep(.26, .72, grassy * .58 + broad * .25 + middle * .28);
-                color = lerp(_HarborLandColor.rgb, _HarborGrassColor.rgb, coverage * .94);
-                half slope = i.slope;
-                half3 rock = lerp(half3(.24,.25,.24), half3(.43,.43,.40), broad);
-                color = lerp(color, rock, slope * .82);
-                color *= .69 + tone * .31 + pattern * .38;
-                float2 rockUV = uv / 13.0 + .09 * float2(broad,middle);
-                half3 photo = tex2D(_CoastColor, rockUV).rgb;
-                half luma = dot(photo,half3(.24,.62,.14));
-                half3 moss = lerp(luma.xxx, photo, .68);
-                color = lerp(moss * lerp(.92h,1.14h,coverage), color * (.53h+luma), .28h + .37h*_HarborPoster);
-                half2 normalXY = (tex2D(_CoastNormals,rockUV).rg * 2-1) * (.56h-.26h*_HarborPoster);
-                o.Normal = normalize(half3(normalXY, 1));
+                fixed4 tree = tex2D(_Conifers, i.cardUV);
+                color *= tree.rgb;
+                o.Alpha = tree.a;
             }
-            else
+            else if (i.color.a < .375)
             {
-                color = i.color.rgb;
-                if (i.color.a < .125)
-                {
-                    fixed4 tree = tex2D(_Conifers, i.cardUV);
-                    color *= tree.rgb;
-                    o.Alpha = tree.a;
-                }
-                else if (i.color.a < .375)
-                {
-                    fixed4 foliage = tex2D(_Plants, i.cardUV);
-                    color *= foliage.rgb;
-                    o.Alpha = foliage.a;
-                }
-                else if (i.color.a < .625)
-                {
-                    color *= tex2D(_Bark, i.cardUV).rgb;
-                }
-                // The foliage palette follows the same pigment shift as the meadow.
-                color = lerp(color, color * half3(.75,1.02,1.12), _HarborDusk * .65);
-                color = lerp(color, color * half3(.86,1.08,.88), _HarborPoster * .6);
-                color *= .88 + pattern * .22;
+                fixed4 foliage = tex2D(_Plants, i.cardUV);
+                half3 leaves = foliage.rgb;
+                // Lift the darkest leaves while keeping warm tips and stem silhouettes.
+                leaves = leaves*.79h + half3(.092h,.11h,.061h);
+                color *= leaves;
+                o.Alpha = foliage.a;
             }
-            half band = floor(pattern * 5 + .5) / 5;
+            else if (i.color.a < .625)
+            {
+                color *= tex2D(_Bark, i.cardUV).rgb;
+            }
+            // The foliage palette follows the same pigment shift as the meadow.
+            color = lerp(color, color * half3(.75,1.02,1.12), _HarborDusk * .65);
+            color = lerp(color, color * half3(.86,1.08,.88), _HarborPoster * .6);
+            color *= .93h + broad*.14h;
+            half band = floor(broad * 5 + .5) / 5;
             o.Albedo = color * lerp(1, .84 + band * .3, _HarborPoster);
         }
         ENDCG

@@ -98,6 +98,11 @@ namespace HeavyPockets
                 var leaf=new Batch(); Door(leaf);
                 var door=Mount(site.transform,ReceivingWarehouseLayout.DoorLeafName,leaf.Save("Service door leaf",Dir+"Receiving door.asset"),paint);
                 door.transform.localPosition=ReceivingWarehouseLayout.DoorHinge-ReceivingWarehouseLayout.Origin;
+                var shutter = new Batch();
+                LoadingShutter(shutter);
+                var curtain = Mount(site.transform, ReceivingWarehouseLayout.GateLeafName,
+                    shutter.Save("Interlocking steel slats", Dir+"Receiving shutter.asset"), paint);
+                curtain.transform.localPosition = ReceivingWarehouseLayout.GateBottom-ReceivingWarehouseLayout.Origin;
                 foreach(float x in new[]{-3.6f,3.55f})
                 {
                     var lamp=new GameObject("Подвесной светильник").AddComponent<Light>();
@@ -122,7 +127,7 @@ namespace HeavyPockets
 
         private static void Wall(Batch b,float x,float z,float width,float depth)
         {
-            // The scanned windows and rolling shutter recess into the masonry. A single
+            // The scanned windows recess into the masonry. A single
             // inward-facing lining keeps these exterior recesses visible at oblique angles.
             bool endWall = depth>width;
             Vector3 n = endWall ? -Mathf.Sign(x)*Vector3.right : -Mathf.Sign(z)*Vector3.forward;
@@ -138,13 +143,19 @@ namespace HeavyPockets
         {
             b.Box(Finish.Concrete,C(201,197,182),0,-.045f,0,14,.090f,9);
             Wall(b,0,4.296f,13.66f,.10f); Wall(b,-6.807f,0,.10f,8.52f); Wall(b,6.807f,0,.10f,8.52f);
-            // Inside linings stop at the reveal. Exterior surfaces stay behind the scan.
-            Wall(b,(-6.85f+4.62f)*.5f,-4.286f,11.47f,.10f);
-            Wall(b,(5.78f+6.85f)*.5f,-4.286f,1.07f,.10f);
-            b.Box(Finish.Plaster,Ivory,5.2f,3.42f,-4.286f,1.16f,2.46f,.10f);
-            // Cast plinth underneath the original scanned panels, cut through at ground level.
-            b.Box(Finish.Concrete,Iron,-1.15f,.073f,-4.431f,11.70f,.146f,.117f);
-            b.Box(Finish.Concrete,Iron,6.39f,.073f,-4.431f,1.22f,.146f,.117f);
+            foreach (Bounds span in ReceivingWarehouseLayout.FrontMasonry)
+            {
+                if (span.min.y > .01f)
+                {
+                    b.Panel(Finish.Plaster,Ivory,V(span.center.x,span.center.y,span.max.z),
+                        Vector3.right*span.extents.x,Vector3.up*span.extents.y,Vector3.forward);
+                }
+                else
+                {
+                    Wall(b,span.center.x,-4.29f,span.size.x,.10f);
+                    b.Box(Finish.Concrete,Iron,span.center.x,.076f,-4.43f,span.size.x,.152f,.14f);
+                }
+            }
             b.Box(Finish.Concrete,Iron,0,.073f,4.431f,14,.146f,.117f);
             foreach(float x in new[]{-6.93f,6.93f}) b.Box(Finish.Concrete,Iron,x,.073f,0,.14f,.146f,8.87f);
             // The dark jamb and two slim stops frame a 1.08 × 2.10 m moving leaf.
@@ -166,11 +177,63 @@ namespace HeavyPockets
             Window(b,V(-6.73f,1.90f,-2.96f),Vector3.back,1.77f,1.56f);
             Window(b,V(6.73f,2.11f,-2.96f),Vector3.forward,.65f,1.18f);
             Window(b,V(6.73f,2.39f,2.96f),Vector3.forward,1.16f,.70f);
-            b.Box(Finish.Paint,Ink,0,1.59f,-3.88f,3.67f,3.18f,.047f);
-            for(int i=0;i<25;i++)
-                b.Box(Finish.Metal,C(145,154,144),0,.072f+i*.124f,-3.84f,3.47f,.115f,.047f);
-            foreach(float x in new[]{-1.82f,1.82f}) b.Box(Finish.Paint,Teal,x,1.57f,-3.82f,.105f,3.15f,.13f);
-            b.Box(Finish.Paint,Iron,0,3.26f,-3.80f,3.86f,.29f,.30f);
+            ShutterFrame(b);
+        }
+
+        private static void ShutterFrame(Batch b)
+        {
+            const float width=ReceivingWarehouseLayout.GateWidth, height=ReceivingWarehouseLayout.GateHeight;
+            float z = ReceivingWarehouseLayout.GateBottom.z-ReceivingWarehouseLayout.Origin.z;
+            foreach (float side in new[]{-1f, 1f})
+            {
+                float x = side*(width*.5f+.045f);
+                b.Box(Finish.Paint,Teal,x,height*.5f,z+.015f,.090f,height,.40f);
+                b.Box(Finish.Metal,Iron,x,height*.5f,z-.17f,.056f,height,.038f);
+                for(int bolt=0; bolt<4; ++bolt)
+                    b.Box(Finish.Metal,Ivory,x,.31f+bolt*.75f,z-.195f,.018f,.018f,.006f);
+            }
+            b.Box(Finish.Metal,Teal,0,height+.05f,z,width+.18f,.10f,.40f);
+            b.Box(Finish.Paint,C(109,127,122),0,height+.23f,z+.06f,width+.33f,.34f,.49f);
+            b.Box(Finish.Metal,Iron,0,height+.101f,z-.188f,width+.34f,.035f,.055f);
+            // Two reachable control stations, one on each face of the entrance.
+            foreach (float face in new[]{-1f,1f})
+            {
+                float stationZ = face<0 ? -4.54f : -4.185f;
+                b.Box(Finish.Paint,Ink,2.08f,1.18f,stationZ,.13f,.23f,.075f);
+                b.Box(Finish.Metal,Iron,2.08f,1.18f,stationZ+face*.041f,.110f,.20f,.014f);
+                foreach (float button in new[]{-.044f,.044f})
+                {
+                    Vector3 pin = V(2.08f,1.18f+button,stationZ+face*.05f);
+                    Color32 tint = button>0 ? C(115,170,135) : C(181,108,87);
+                    b.Rod(pin,pin+Vector3.forward*(face*.013f),.020f,tint);
+                    b.Panel(Finish.Paint,tint,pin+Vector3.forward*(face*.014f),
+                        Vector3.right*.014f,Vector3.up*.014f,Vector3.forward*face);
+                }
+            }
+        }
+
+        private static void LoadingShutter(Batch b)
+        {
+            const float w=ReceivingWarehouseLayout.GateWidth, h=ReceivingWarehouseLayout.GateHeight;
+            const float t=ReceivingWarehouseLayout.GateThickness, rail=.056f;
+            const int slats=32;
+            float pitch=(h-rail)/slats;
+            Color32 enamel=C(155,176,168);
+            b.Box(Finish.Metal,Iron,0,h*.5f,0,w,h,t*.50f);
+            for(int i=0;i<slats;i++)
+            {
+                float y=rail+i*pitch;
+                foreach(float side in new[]{-1f,1f})
+                {
+                    Vector3 normal=Vector3.forward*side;
+                    b.Panel(Finish.Paint,enamel,V(0,y+.54f*pitch,side*.025f),Vector3.right*(w*.5f),
+                        V(0,.40f*pitch,side*.006f),normal);
+                    b.Panel(Finish.Metal,Iron,V(0,y+.09f*pitch,side*.025f),Vector3.right*(w*.5f),
+                        V(0,.055f*pitch,-side*.006f),normal);
+                }
+            }
+            b.Box(Finish.Paint,Teal,0,rail*.58f,0,w,rail*.84f,t);
+            b.Box(Finish.Metal,Ink,0,rail*.12f,0,w,.014f,t*.66f);
         }
 
         private static void Window(Batch b,Vector3 c,Vector3 right,float width,float height)

@@ -40,6 +40,12 @@ namespace HeavyPockets
             if (forCellBake) return;
             Font.textureRebuilt += RefreshSignAtlas;
 
+            if (TrainingGround.Active)
+            {
+                BuildTrainingRange();
+                BuildLighting();
+                return;
+            }
             BuildRoom();
             BakeArchitecture();
             BuildCoast();

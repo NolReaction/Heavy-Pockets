@@ -210,6 +210,13 @@ namespace HeavyPockets
                 case OutdoorKind.FreightCrate: paint = oxide; break;
                 case OutdoorKind.Barrier: paint = concrete; break;
                 case OutdoorKind.Shed:
+                    if (bounds.Equals(OutdoorLayout.ReceivingWarehouse.Bounds))
+                    {
+                        foreach (var wall in ReceivingWarehouseLayout.FrontMasonry) HullPanel(wall, oxide);
+                        foreach (var wall in ReceivingWarehouseLayout.SideMasonry) HullPanel(wall, oxide);
+                        HullPanel(ReceivingWarehouseLayout.Roof, teal);
+                        return;
+                    }
                     paint=oxide;
                     Part(site,"Roof",0,size.y-.10f,0,size.x,.20f,size.z,teal);
                     size.y-=.20f; mid.y=size.y*.5f;
@@ -231,6 +238,12 @@ namespace HeavyPockets
                     break;
             }
             Part(site,"Distant hull",0,mid.y,0,size.x,size.y,size.z,paint);
+
+            void HullPanel(Bounds panel, Material finish)
+            {
+                var c=panel.center; var s=panel.size;
+                Part(site,"Distant warehouse panel",c.x,c.y,c.z,s.x,s.y,s.z,finish);
+            }
         }
     }
 }

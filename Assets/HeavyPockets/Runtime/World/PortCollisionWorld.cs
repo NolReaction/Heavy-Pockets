@@ -17,11 +17,7 @@ namespace HeavyPockets
             chest.transform.SetParent(port.transform, false);
             foreach (Bounds bounds in RaidMap.CollisionBoxes)
                 AddBox(bounds == RaidMap.CargoCase ? chest : port, bounds);
-            var hinge = new GameObject("Receiving warehouse door hitbox");
-            hinge.transform.SetParent(port.transform, false);
-            hinge.transform.localPosition = ReceivingWarehouseLayout.DoorHinge;
-            AddBox(hinge, new Bounds(WarehouseDoor.LeafCenter, WarehouseDoor.LeafSize));
-            hinge.AddComponent<WarehouseDoor>();
+            WorldMechanisms.CreateColliders(port.transform);
         }
 
         private static void AddBox(GameObject owner, Bounds bounds)

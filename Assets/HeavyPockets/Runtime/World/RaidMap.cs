@@ -30,12 +30,17 @@ namespace HeavyPockets
         private static readonly Bounds FaceDetails = Box(0, .44f, 0, 1.98f, 2.245f, .17f);
         private static readonly Bounds Placard = Box(0, 1.39f, 0, .83f, 1.81f, .196f);
         internal static readonly Bounds CargoCase = Box(Crate.x, 0, Crate.y, CrateX, .86f, CrateZ);
-        internal static readonly Bounds[] CollisionBoxes = BuildCollisionBoxes();
+        private static readonly Bounds[] DepotBoxes = BuildCollisionBoxes();
+        internal static Bounds[] CollisionBoxes => TrainingGround.Active ? TrainingLayout.Collision : DepotBoxes;
 
         private const float ContactTolerance = .0005f;
         private const int CellSize = 8;
         private const int Columns = (int)(RoomX * 2f) / CellSize, Rows = (int)(RoomZ * 2f) / CellSize;
-        private static readonly Bounds[][] collisionCells = BuildCollisionCells();
+        private static readonly Bounds[][] collisionCells = BuildCollisionCells(DepotBoxes);
+        private static class RangeCells
+        {
+            internal static readonly Bounds[][] All = BuildCollisionCells(TrainingLayout.Collision);
+        }
 
         private static Bounds[] BuildCollisionBoxes()
         {
@@ -55,10 +60,10 @@ namespace HeavyPockets
 
         // Insert each footprint into every cell a player's radius can touch.
         // All motor and foot-contact queries then read one local immutable array.
-        private static Bounds[][] BuildCollisionCells()
+        private static Bounds[][] BuildCollisionCells(Bounds[] geometry)
         {
             var lists = new List<Bounds>[Columns * Rows];
-            foreach (Bounds box in CollisionBoxes)
+            foreach (Bounds box in geometry)
             {
                 Vector3 min = box.min, max = box.max;
                 int left = Column(min.x - PlayerRadius), right = Column(max.x + PlayerRadius);
@@ -75,7 +80,8 @@ namespace HeavyPockets
 
         private static int Column(float x) => Mathf.Clamp(Mathf.FloorToInt((x + RoomX) / CellSize), 0, Columns - 1);
         private static int Row(float z) => Mathf.Clamp(Mathf.FloorToInt((z + RoomZ) / CellSize), 0, Rows - 1);
-        private static Bounds[] Nearby(Vector2 p) => collisionCells[Row(p.y) * Columns + Column(p.x)];
+        private static Bounds[] Nearby(Vector2 p) =>
+            (TrainingGround.Active ? RangeCells.All : collisionCells)[Row(p.y) * Columns + Column(p.x)];
 
         private static Bounds Box(float x, float bottom, float z, float halfX, float top, float halfZ)
         {
@@ -120,9 +126,8 @@ namespace HeavyPockets
 
         private static bool Blocked(Vector2 p, float feet, float top)
         {
-            Bounds door = WarehouseDoor.LeafBounds;
-            // The four-centimetre sweep under the leaf is also solid to footprint-only route queries.
-            if (door.max.y > feet + ContactTolerance && TouchesFootprint(door, p)) return true;
+            foreach (var passage in WorldMechanisms.Active)
+                if (passage.BlocksTravel(p, feet, top)) return true;
             foreach (Bounds box in Nearby(p))
                 if (box.max.y > feet + ContactTolerance && box.min.y < top - ContactTolerance &&
                     TouchesFootprint(box, p)) return true;
@@ -138,8 +143,10 @@ namespace HeavyPockets
         // cannot become a landing surface until the feet have actually cleared it.
         internal static float FloorBelow(Vector2 p, float feet)
         {
-            Bounds door = WarehouseDoor.LeafBounds;
-            float floor = door.max.y <= feet + ContactTolerance && TouchesFootprint(door, p) ? door.max.y : 0f;
+            float floor = 0f;
+            foreach (var passage in WorldMechanisms.Active)
+                if (passage.Touches(p, out _, out float surface) && surface <= feet + ContactTolerance)
+                    floor = Mathf.Max(floor, surface);
             foreach (Bounds box in Nearby(p))
             {
                 float top = box.max.y;
@@ -152,9 +159,10 @@ namespace HeavyPockets
 
         internal static float CeilingAbove(Vector2 p, float head)
         {
-            Bounds door = WarehouseDoor.LeafBounds;
-            float ceiling = door.min.y >= head - ContactTolerance && TouchesFootprint(door, p)
-                ? door.min.y : float.PositiveInfinity;
+            float ceiling = float.PositiveInfinity;
+            foreach (var passage in WorldMechanisms.Active)
+                if (passage.Touches(p, out float underside, out _) && underside >= head - ContactTolerance)
+                    ceiling = Mathf.Min(ceiling, underside);
             foreach (Bounds box in Nearby(p))
             {
                 float bottom = box.min.y;
@@ -191,6 +199,7 @@ namespace HeavyPockets
         internal static bool ClearSegment(Vector3 from, Vector3 to)
         {
             Vector3 ray = to - from;
+            if (TrainingGround.Active) return ClearYardSegment(from, ray);
             return !Intersects(Partition, from, ray, 1f, out _)
                 && !Intersects(Capping, from, ray, 1f, out _)
                 && !Intersects(WearStrip, from, ray, 1f, out _)

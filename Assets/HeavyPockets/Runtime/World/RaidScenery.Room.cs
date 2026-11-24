@@ -23,24 +23,9 @@ namespace HeavyPockets
                 Part(a, "Saw cut", x, .011f, -1, .028f, .003f, 20, floorFinish);
             for (float z = -6; z < 9; z += 5)
                 Part(a, "Saw cut", 0, .012f, z, 30, .003f, .028f, floorFinish);
-            Part(a, "Harbor service road", 11, -.03f, 0, 7, .103f, 115, floorFinish);
-            Part(a, "North service road", 8, -.029f, 31, 116, .11f, 6, floorFinish);
-            Part(a, "Dispatch spur", RaidMap.Exit.x, -.028f, 40, 6, .121f, 17, floorFinish);
             Part(a, "Crane runway", 38, -.056f, 20, 19, .14f, 18, concrete);
-
-            for (int z = -54; z < 56; z += 7)
-            {
-                if (Mathf.Abs(z - 31) < 6) continue;
-                Part(a, "Broken lane line", 11, .03f, z, .10f, .006f, 2.4f, chalk);
-            }
-            for (int x = -46; x < 64; x += 7)
-            {
-                if (Mathf.Abs(x - 11) < 6 || Mathf.Abs(x - RaidMap.Exit.x) < 5) continue;
-                Part(a, "Broken lane line", x, .035f, 31, 2.4f, .006f, .10f, chalk);
-            }
             for (int side = -1; side <= 1; side += 2)
             {
-                Part(a, "Stop bar", 11 + side * 1.65f, .031f, 31 + side * 4.7f, 2.8f, .006f, .27f, chalk);
                 Part(a, "Receiving bay edging", side * 4f, .019f, -1, .11f, .006f, 11.6f, chalk);
                 Part(a, "Cargo bay end", side * 3f, .02f, 4.75f, 2f, .006f, .11f, chalk);
             }

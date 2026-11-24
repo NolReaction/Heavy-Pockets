@@ -95,10 +95,10 @@ try {
         if (-not $client.WaitForExit(15000) -or $client.ExitCode -ne 0) { throw "Client did not exit cleanly: $($client.Id)" }
     }
     if ($WarehouseOnly) {
-        foreach ($mark in 'B.saw-opening','B.swing-blocked','A.weighed','B.closed-outside','A.opened-inside','B.both-through','A.double-load','B.double-load','A.single-load') {
+        foreach ($mark in 'B.saw-opening','B.swing-blocked','A.weighed','B.closed-outside','A.opened-inside','B.both-through','A.double-load','B.double-load','A.single-load','B.gate-blocked','B.gate-closed','A.raised-outside','B.gate-crossed') {
             if (!(Test-Path -LiteralPath (Join-Path $run $mark))) { throw "Missing $mark" }
         }
-        Write-Host 'Both players used the receiving door. The door respected occupied space, and the floor scale registered and released the load.'
+        Write-Host 'Both players operated the two-way door and shutter, blocked occupied passages and shared the floor-scale load.'
         return
     }
     if ($ChartHouseOnly) {

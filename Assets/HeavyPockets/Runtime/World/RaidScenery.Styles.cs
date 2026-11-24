@@ -10,7 +10,7 @@ namespace HeavyPockets
         private int currentStyle;
         private Material harborSky, previousSky;
         private Light sun, previousSun;
-        private readonly Light[] floodlights = new Light[3];
+        private readonly Light[] floodlights = TrainingGround.Active ? System.Array.Empty<Light>() : new Light[3];
         private readonly HarborLightingSettings[] settings = new HarborLightingSettings[Looks.Length];
         private SceneLighting previousLighting;
         private float refreshSkyAt;

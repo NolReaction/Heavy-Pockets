@@ -13,15 +13,16 @@ namespace HeavyPockets
 
         private void BuildCoast()
         {
-            var earth = new Material(Resources.Load<Shader>("CoastalGround")) { name = "Harbour gravel and meadow" };
-            earth.SetTexture("_Grain", Resources.Load<Texture2D>("DepotGrain"));
-            shorePlants = new Material(earth) { name = "Coastal vegetation and granite" };
-            shorePlants.SetFloat("_Habitat", 1f);
+            var earth = new Material(Resources.Load<Material>("SurfaceGarden/Coastal surface")) { name = "Harbour grass and sand" };
+            earth.EnableKeyword("_PORT_COAST");
+            earth.SetVector("_QuayRoad",new Vector4(11f,0f,3.5f,57.5f));
+            earth.SetVector("_CrossRoad",new Vector4(8f,31f,58f,3f));
+            earth.SetVector("_SpurRoad",new Vector4(RaidMap.Exit.x,40f,3f,8.5f));
+            shorePlants = new Material(Resources.Load<Shader>("CoastalGround")) { name = "Coastal vegetation and granite" };
+            shorePlants.SetTexture("_Grain", Resources.Load<Texture2D>("DepotGrain"));
             shorePlants.SetTexture("_Conifers", Resources.Load<Texture2D>("ShoreConifers"));
             shorePlants.SetTexture("_Plants", Resources.Load<Texture2D>("QuaysidePlants"));
             shorePlants.SetTexture("_Bark", Resources.Load<Texture2D>("QuaysideBark"));
-            earth.SetTexture("_CoastColor", Resources.Load<Texture2D>("CoastRockColor"));
-            earth.SetTexture("_CoastNormals", Resources.Load<Texture2D>("CoastRockNormals"));
             var sea = new Material(Resources.Load<Shader>("CoastalWater")) { name = "Tidal water" };
             surfaces.Add(earth);
             surfaces.Add(shorePlants);

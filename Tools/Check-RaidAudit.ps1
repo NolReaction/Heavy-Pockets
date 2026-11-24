@@ -35,6 +35,7 @@ function Read-Audit([string]$name) {
             $round = 0L
             $queued = $null
             $doorOpen = $null
+            $mechanism = $null
             $scaleKilograms = $null
             $streamId = [long]$row.peer
             $expectedDirection = if (($name -eq 'server') -eq ($row.channel -eq 'event')) { 'tx' } else { 'rx' }
@@ -144,8 +145,14 @@ function Read-Audit([string]$name) {
                     Require ($bytes.Length -eq 2 -and $bytes[1] -in 1..4) "$name invalid base loadout event"
                     $pouchLevel = [int]$bytes[1]
                 } elseif ($code -eq 12) {
-                    Require ($bytes.Length -eq 2 -and $bytes[1] -in 0,1) "$name invalid warehouse door state"
-                    $doorOpen = [bool]$bytes[1]
+                    Require ($bytes.Length -eq 12 -and $bytes[1] -in 0,1) "$name invalid passage snapshot"
+                    $mechanism = [int]$bytes[1]
+                    $minimum = if ($mechanism -eq 0) { 0 } else { 1 }
+                    $startedAt = [BitConverter]::ToDouble($bytes,4)
+                    Require ($bytes[2] -in $minimum..2 -and $bytes[3] -in $minimum..2 -and
+                        ($bytes[2] -eq 1 -or $bytes[3] -eq 1) -and $startedAt -ge 0 -and
+                        ![double]::IsInfinity($startedAt)) "$name invalid passage movement"
+                    $doorOpen = $bytes[3] -ne 1
                 } elseif ($code -eq 13) {
                     Require ($bytes.Length -eq 2 -and $bytes[1] -in 0,75,150,200) "$name invalid scale reading"
                     $scaleKilograms = [int]$bytes[1]
@@ -224,14 +231,14 @@ function Read-Audit([string]$name) {
                             $queued = [int]$bytes[5]
                         }
                     } elseif ($code -eq 13) {
-                        Require ($bytes.Length -eq 2 -and $bytes[1] -in 0,1) "$name invalid warehouse door request"
+                        Require ($bytes.Length -eq 3 -and $bytes[1] -in 0,1 -and $bytes[2] -in 0,1) "$name invalid passage control request"
                     } else { Require ($code -in 2,3 -and $bytes.Length -eq 1) "$name unknown command" }
                 }
             }
             [pscustomobject]@{
                 sequence = $prior; direction = $row.direction; peer = [long]$row.peer
                 channel = $row.channel; payload = [string]$row.payload; code = $code
-                doorOpen = $doorOpen
+                doorOpen = $doorOpen; mechanism = $mechanism
                 scaleKilograms = $scaleKilograms
                 items = $items; types = $types; complete = $complete; status = $status; actor = $actor
                 instance = $instance; operation = $operation; shapes = $shapes; positions = $positions
@@ -622,9 +629,11 @@ foreach ($role in 'A','B') {
         Require ($start.Count -eq 2 -and ($start.round -join ',') -ceq '1,2') "$label must enter each raid once"
         foreach ($round in 1,2) {
             $epoch = @($rows | Where-Object activeRound -eq $round)
-            $entry = @($epoch | Where-Object channel -eq 'event' | Select-Object -First 5)
-            Require (($entry.code -join ',') -ceq '8,12,1,10,4' -and $entry[1].doorOpen -eq $false -and
-                $entry[2].actor -eq $peer -and $entry[3].active -eq 1 -and $entry[4].items.Count -eq 0) "$label incorrect start sequence, door state, equipment or initial bag"
+            $entry = @($epoch | Where-Object channel -eq 'event' | Select-Object -First 6)
+            $initialIds = @($entry[1].mechanism, $entry[2].mechanism | Sort-Object)
+            Require (($entry.code -join ',') -ceq '8,12,12,1,10,4' -and ($initialIds -join ',') -ceq '0,1' -and
+                !$entry[1].doorOpen -and !$entry[2].doorOpen -and
+                $entry[3].actor -eq $peer -and $entry[4].active -eq 1 -and $entry[5].items.Count -eq 0) "$label incorrect start sequence, door state, equipment or initial bag"
             $ack = @($epoch | Where-Object { $_.channel -eq 'command' -and $_.code -eq 8 })
             Require ($ack.Count -eq 1 -and $ack[0].round -eq $round -and $ack[0].sequence -gt $start[$round-1].sequence) "$label missing round acknowledgement"
             $beforeAck = @($epoch | Where-Object { $_.channel -eq 'command' -and $_.sequence -lt $ack[0].sequence })

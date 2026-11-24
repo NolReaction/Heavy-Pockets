@@ -60,20 +60,38 @@ namespace HeavyPockets
         }
 
         internal static bool BlocksSight(Vector3 origin, Vector3 segment)
-            => RaidMap.Intersects(WarehouseDoor.LeafBounds, origin, segment, 1f, out _) ||
-                BlocksStaticSight(origin, segment);
+        {
+            foreach (var passage in WorldMechanisms.Active)
+                if (passage.Trace(origin, segment, 1f, 0f, out _)) return true;
+            return BlocksStaticSight(origin, segment);
+        }
 
         internal static bool BlocksStaticSight(Vector3 origin, Vector3 segment)
         {
+            if (TrainingGround.Active)
+            {
+                foreach (Bounds box in TrainingLayout.Collision)
+                    if (RaidMap.Intersects(box, origin, segment, 1f, out _)) return true;
+                return false;
+            }
             float length = 1f;
             return nodes.Length > 0 && Trace(0, origin, segment, ref length, false);
         }
 
         internal static float ClipCamera(Vector3 origin, Vector3 direction, float length)
         {
-            Bounds door = WarehouseDoor.LeafBounds;
-            door.Expand(2f * RaidCameraBoom.Clearance);
-            if (RaidMap.Intersects(door, origin, direction, length, out float doorHit)) length = doorHit;
+            foreach (var passage in WorldMechanisms.Active)
+                if (passage.Trace(origin, direction, length, RaidCameraBoom.Clearance, out float hit)) length = hit;
+            if (TrainingGround.Active)
+            {
+                foreach (Bounds solid in TrainingLayout.Collision)
+                {
+                    Bounds padded = solid;
+                    padded.Expand(2f * RaidCameraBoom.Clearance);
+                    if (RaidMap.Intersects(padded, origin, direction, length, out float first)) length = first;
+                }
+                return length;
+            }
             if (length > 0 && nodes.Length > 0) Trace(0, origin, direction, ref length, true);
             if (length > 0 && cameraGlass.Length > 0 && RaidMap.Intersects(glazingBounds, origin, direction, length, out _))
                 foreach (Bounds pane in cameraGlass)
