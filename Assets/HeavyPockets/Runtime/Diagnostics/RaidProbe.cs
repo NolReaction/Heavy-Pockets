@@ -805,18 +805,81 @@ namespace HeavyPockets
             yield return TestPersonalGrid();
         }
 
+        private IEnumerator CheckMapSwitch()
+        {
+            for (int pass = 0; pass < 2; pass++)
+            {
+                bool training = !TrainingGround.Active;
+                uint original = Client.ProbeRound;
+                Phase(training ? "choose practice ground" : "return to port");
+                Client.EscapePressed();
+                if (!Client.ProbeMenuClick(RaidMenuAction.Maps)) { Fail("Map picker is not reachable"); yield break; }
+                if (role == "A")
+                {
+                    if (!Client.ProbeMenuClick(RaidMenuAction.ChangeMap)) { Fail("Map action missing"); yield break; }
+                    yield return new WaitUntil(() => Client.ProbeMapVotes == 1 && Exists("B.offered" + pass));
+                    Client.ProbeMenuClick(RaidMenuAction.ChangeMap);
+                    yield return new WaitUntil(() => Client.ProbeMapVotes == 0 && Exists("B.withdrawn" + pass));
+                    if (Client.ProbeRound != original) { Fail("Changed map on a single vote"); yield break; }
+                    Client.ProbeMenuClick(RaidMenuAction.ChangeMap);
+                }
+                else
+                {
+                    yield return new WaitUntil(() => Client.ProbeMapVotes == 1);
+                    Signal("offered" + pass);
+                    yield return new WaitUntil(() => Client.ProbeMapVotes == 0);
+                    Signal("withdrawn" + pass);
+                    yield return new WaitUntil(() => Client.ProbeMapVotes == 1);
+                    Client.ProbeMenuClick(RaidMenuAction.ChangeMap);
+                }
+                yield return new WaitUntil(() => Client.ProbeRound != original && Client.ProbeMapReady && freshBag);
+                int slot = role == "A" ? 0 : 1;
+                bool hasParkour = GameObject.Find("Parkour landings") != null;
+                if (TrainingGround.Active != training || Client.ProbeScreen != RaidScreen.Play ||
+                    !Client.OwnAvatarVisible || Vector2.Distance(position,RaidMap.Spawn(slot)) > .2f ||
+                    hasParkour != training ||
+                    GameObject.Find("Port hitboxes") == null)
+                { Fail("Client loaded the wrong world, physics, or spawn"); yield break; }
+                Signal("arrived" + pass);
+                yield return new WaitUntil(() => Exists("A.arrived" + pass) && Exists("B.arrived" + pass));
+            }
+        }
+
         private IEnumerator Run()
         {
             Phase("first authoritative pose");
             yield return new WaitUntil(() => havePose);
             Signal("connected", network.LocalClientId.ToString(CultureInfo.InvariantCulture));
+            bool mapSwitch = Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeMapSwitch");
+            if (mapSwitch)
+            {
+                if (role == "A")
+                {
+                    Phase("solo map pick before second connection");
+                    yield return new WaitUntil(() => Client.ProbeMapReady);
+                    Client.EscapePressed();
+                    if (!Client.ProbeMenuClick(RaidMenuAction.Maps) || !Client.ProbeMenuClick(RaidMenuAction.ChangeMap))
+                    { Fail("Could not start solo map switch"); yield break; }
+                }
+                Phase("join the existing training round");
+                yield return new WaitUntil(() => TrainingGround.Active && Client.ProbeRound == 2 && Client.ProbeMapReady);
+                if (Vector2.Distance(position,RaidMap.Spawn(role == "A" ? 0 : 1)) > .2f || !Client.OwnAvatarVisible ||
+                    !GameObject.Find("Parkour landings")) { Fail("Late join started on the wrong map"); yield break; }
+                Signal("joined-training");
+                yield return new WaitUntil(() => Exists("A.joined-training") && Exists("B.joined-training"));
+            }
             Phase("both connected");
             yield return new WaitUntil(() => Exists("A.connected") && Exists("B.connected"));
             bool chartHouse = Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeChartHouse");
             bool warehouse = Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeWarehouse");
-            if (warehouse || chartHouse || Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeSurfaces"))
+            if (mapSwitch || warehouse || chartHouse || Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeSurfaces"))
             {
-                if (warehouse) yield return CheckWarehouse();
+                if (mapSwitch) yield return CheckMapSwitch();
+                else if (warehouse)
+                {
+                    yield return CheckWarehouse();
+                    yield return SearchWarehouseCases();
+                }
                 else yield return chartHouse ? CheckChartHouse() : CheckFreightSurfaces();
                 finished = true;
                 Signal("done");

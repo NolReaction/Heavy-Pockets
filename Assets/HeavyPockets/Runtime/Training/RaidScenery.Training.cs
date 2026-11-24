@@ -11,7 +11,8 @@ namespace HeavyPockets
         private void BuildTrainingRange()
         {
             TrainingSurfaces = CoastalSurfaceField.Create(root, Vector2.zero,
-                new Vector2(RaidMap.RoomX * 2f, RaidMap.RoomZ * 2f), TrainingLayout.IsPaved).GetComponent<CoastalSurfaceField>();
+                new Vector2(RaidMap.RoomX * 2f, RaidMap.RoomZ * 2f), TrainingLayout.IsPaved,
+                ReceivingWarehouseLayout.Foundation(TrainingBuildings.Warehouse)).GetComponent<CoastalSurfaceField>();
             TrainingGrove.Plant(TrainingSurfaces);
             var mint = Surface("Seafoam enamel", Rgb(0x71B3A4));
             var brick = Surface("Terracotta rubber", Rgb(0xB96947), SurfaceFinish.Rubber);

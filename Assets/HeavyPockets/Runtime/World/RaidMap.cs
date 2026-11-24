@@ -94,7 +94,7 @@ namespace HeavyPockets
 
         public static Vector2 Spawn(int slot)
         {
-            if (TrainingGround.Active) return TrainingGround.Spawn;
+            if (TrainingGround.Active) return TrainingGround.Spawn + Vector2.right * ((slot % 4) * 1.65f);
             return slot % 2 == 0 ? new Vector2(-4f, -9f) : new Vector2(1.15f, 1.25f);
         }
 
@@ -180,17 +180,19 @@ namespace HeavyPockets
             return InBox(p, Exit, ExitX, ExitZ);
         }
 
-        internal static bool WithinReach(Vector2 p, float feet)
+        internal static bool WithinReach(Vector2 p, float feet, byte container = 0)
         {
-            float aboveCase = Mathf.Max(0f, feet - CargoCase.max.y);
-            return (p - Crate).sqrMagnitude + aboveCase * aboveCase <= Reach * Reach;
+            var box = RaidContainers.BoundsFor(container);
+            float aboveCase = Mathf.Max(0f, feet - box.max.y);
+            return (p - new Vector2(box.center.x,box.center.z)).sqrMagnitude + aboveCase * aboveCase <= Reach * Reach;
         }
 
-        public static bool CanOpen(Vector2 p, RaidLocomotion motion = default)
+        public static bool CanOpen(Vector2 p, RaidLocomotion motion = default, byte container = 0)
         {
-            if (!WithinReach(p, motion.Height)) return false;
+            if (container >= RaidContainers.Count || !WithinReach(p, motion.Height, container)) return false;
             Vector3 eye = RaidCameraBoom.Eye(p) + Vector3.up * motion.EyeOffset;
-            Vector3 lid = new Vector3(Crate.x, CargoCase.max.y + .01f, Crate.y);
+            var box = RaidContainers.BoundsFor(container);
+            Vector3 lid = new Vector3(box.center.x, box.max.y + .01f, box.center.z);
             return ClearSegment(eye, lid);
         }
 

@@ -56,13 +56,13 @@ namespace HeavyPockets
             slots.Exists(s => s.Owner == player && s.Location == where);
 
         internal RaidStatus MoveGear(ulong player, HashSet<uint> identified, uint id,
-            GearLocation from, GearLocation to, int x, int y, bool rotated)
+            GearLocation from, GearLocation to, int x, int y, bool rotated, byte container = 0)
         {
             ulong? owner = from == GearLocation.Crate ? (ulong?)null : player;
-            int index = slots.FindIndex(s => s.Item.Id == id && s.Location == from && s.Owner == owner);
+            int index = slots.FindIndex(s => s.Item.Id == id && s.Location == from && s.Owner == owner && (owner.HasValue || s.Container == container));
             if (index < 0 || (from == GearLocation.Crate && !identified.Contains(id)))
                 return RaidStatus.Denied;
-            var status = GearCatalog.PlanMove(slots[index].Item, from, to, x, y, rotated, Bag(player), Contents(null),
+            var status = GearCatalog.PlanMove(slots[index].Item, from, to, x, y, rotated, Bag(player), Contents(null, container),
                 Gear(player), null, out var item, out var displaced);
             if (status != RaidStatus.Placed) return status;
 
@@ -70,10 +70,10 @@ namespace HeavyPockets
             if (displaced.Id != 0)
             {
                 int displacedIndex = slots.FindIndex(s => s.Item.Id == displaced.Id);
-                slots[displacedIndex] = new Slot { Item = displaced, Owner = owner, Location = from };
+                slots[displacedIndex] = new Slot { Item = displaced, Owner = owner, Container = container, Location = from };
                 if (from == GearLocation.Crate) identified.Add(displaced.Id);
             }
-            slots[index] = new Slot { Item = item, Owner = newOwner, Location = to };
+            slots[index] = new Slot { Item = item, Owner = newOwner, Container = container, Location = to };
             if (to == GearLocation.Crate) identified.Add(id);
             return RaidStatus.Placed;
         }

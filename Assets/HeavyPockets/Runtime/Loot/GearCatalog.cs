@@ -50,7 +50,8 @@ namespace HeavyPockets
                 case GearLocation.Backpack: return type == FieldPack || type == ExpeditionPack;
                 case GearLocation.Pouch: return type >= FirstPouch && type < FirstPouch + 4;
                 default: return slot >= GearLocation.PouchCell && slot <= GearLocation.PouchCell4 &&
-                    type <= LootCatalog.RandomTypeCount && LootCatalog.Width(type, false) * LootCatalog.Height(type, false) <= 2;
+                    (type <= LootCatalog.RandomTypeCount || type >= LootCatalog.FoldingRule) &&
+                    LootCatalog.Width(type, false) * LootCatalog.Height(type, false) <= 2;
             }
         }
 

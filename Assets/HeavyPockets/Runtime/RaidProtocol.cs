@@ -8,9 +8,9 @@ using UnityEngine;
 
 namespace HeavyPockets
 {
-    public enum RaidEventKind : byte { Pose = 1, Left, Crate, Bag, Result, Status, ExitProgress, RaidStarted, RaidQueue, Gear, PouchLevel, Mechanism, ScaleLoad }
+    public enum RaidEventKind : byte { Pose = 1, Left, Crate, Bag, Result, Status, ExitProgress, RaidStarted, RaidQueue, Gear, PouchLevel, Mechanism, ScaleLoad, ContainerLid = 15, MapVote = 21 }
     public enum RaidStatus : byte { Opened = 1, Blocked, Closed, Taken, Empty, Denied, OutOfRange, AlreadyExited, CrateLost, Stored, BagFull, Placed, NoSpace, Stale }
-    internal enum RaidCommand : byte { Move = 1, Open, Close, Take, Store, Place, NextRaid, EnterRaid, MoveGear, SelectGear, SetPouchLevel, EnterBase, SetMechanism }
+    internal enum RaidCommand : byte { Move = 1, Open, Close, Take, Store, Place, NextRaid, EnterRaid, MoveGear, SelectGear, SetPouchLevel, EnterBase, SetMechanism, MapVote = 21 }
 
     public struct RaidEvent
     {
@@ -29,10 +29,12 @@ namespace HeavyPockets
         public uint Operation;
         public uint Round;
         public bool Queued;
-        public byte MechanismId;
+        public byte MechanismId, ContainerId;
         public int FromSide, TargetSide;
         public double StartedAt;
         public byte ScaleKilograms;
+        public bool TrainingMap, Voted;
+        public byte MapVotes, MapPlayers;
         public byte PouchLevel;
     }
 
@@ -40,8 +42,8 @@ namespace HeavyPockets
     // the fields for its own kind. Public poses cannot serialize any inventory fields.
     internal static class RaidWire
     {
-        public const string Commands = "heavypockets.command.v13";
-        public const string Events = "heavypockets.event.v13";
+        public const string Commands = "heavypockets.command.v14";
+        public const string Events = "heavypockets.event.v14";
         private const int ResultCapacity = LootCatalog.BagCapacity + GearCatalog.Slots - 1;
         private const int MaxPayload = 3 + ResultCapacity * 8;
 
@@ -109,6 +111,11 @@ namespace HeavyPockets
                     bytes[2] = (byte)(message.FromSide + 1);
                     bytes[3] = (byte)(message.TargetSide + 1);
                     Buffer.BlockCopy(BitConverter.GetBytes(message.StartedAt), 0, bytes, 4, sizeof(double));
+                    break;
+                case RaidEventKind.ContainerLid:
+                    bytes = new byte[10];
+                    bytes[1] = message.ContainerId;
+                    Buffer.BlockCopy(BitConverter.GetBytes(message.StartedAt), 0, bytes, 2, sizeof(double));
                     break;
                 case RaidEventKind.ScaleLoad:
                     bytes = new byte[] { 0, message.ScaleKilograms };
@@ -178,9 +185,12 @@ namespace HeavyPockets
                 case RaidEventKind.RaidStarted:
                 case RaidEventKind.RaidQueue:
                     if (message.Round == 0) throw new ArgumentOutOfRangeException(nameof(message.Round));
-                    bytes = new byte[message.Kind == RaidEventKind.RaidStarted ? 5 : 6];
+                    bytes = new byte[6];
                     Buffer.BlockCopy(BitConverter.GetBytes(message.Round), 0, bytes, 1, 4);
-                    if (message.Kind == RaidEventKind.RaidQueue) bytes[5] = message.Queued ? (byte)1 : (byte)0;
+                    bytes[5] = (message.Kind == RaidEventKind.RaidQueue ? message.Queued : message.TrainingMap) ? (byte)1 : (byte)0;
+                    break;
+                case RaidEventKind.MapVote:
+                    bytes = new byte[] { 0, message.MapVotes, message.MapPlayers, message.Voted ? (byte)1 : (byte)0 };
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(message));
@@ -223,6 +233,10 @@ namespace HeavyPockets
                         message.TargetSide >= min && message.TargetSide <= 1 &&
                         (message.FromSide == 0 || message.TargetSide == 0) &&
                         message.StartedAt >= 0d && !double.IsInfinity(message.StartedAt);
+                case RaidEventKind.ContainerLid when bytes.Length == 10 && bytes[1] < RaidContainers.Count:
+                    message.ContainerId = bytes[1];
+                    message.StartedAt = BitConverter.ToDouble(bytes,2);
+                    return message.StartedAt >= 0d && !double.IsInfinity(message.StartedAt);
                 case RaidEventKind.ScaleLoad when bytes.Length == 2:
                     message.ScaleKilograms = bytes[1];
                     return bytes[1] == 0 || bytes[1] == WarehouseFloorScale.RunnerMass ||
@@ -302,11 +316,17 @@ namespace HeavyPockets
                 case RaidEventKind.ExitProgress when bytes.Length == 5:
                     message.Seconds = BitConverter.ToSingle(bytes, 1);
                     return Finite(message.Seconds) && message.Seconds >= 0f && message.Seconds <= 3f;
-                case RaidEventKind.RaidStarted when bytes.Length == 5:
+                case RaidEventKind.MapVote when bytes.Length == 4 && bytes[2] >= 1 && bytes[2] <= 4 && bytes[1] <= bytes[2] && bytes[3] <= 1:
+                    message.MapVotes = bytes[1];
+                    message.MapPlayers = bytes[2];
+                    message.Voted = bytes[3] != 0;
+                    return true;
+                case RaidEventKind.RaidStarted when bytes.Length == 6:
                 case RaidEventKind.RaidQueue when bytes.Length == 6:
                     message.Round = BitConverter.ToUInt32(bytes, 1);
-                    if (message.Round == 0 || (bytes.Length == 6 && bytes[5] > 1)) return false;
-                    message.Queued = bytes.Length == 6 && bytes[5] == 1;
+                    if (message.Round == 0 || bytes[5] > 1) return false;
+                    message.Queued = message.Kind == RaidEventKind.RaidQueue && bytes[5] == 1;
+                    message.TrainingMap = message.Kind == RaidEventKind.RaidStarted && bytes[5] == 1;
                     return true;
                 default:
                     return false;
@@ -394,6 +414,15 @@ namespace HeavyPockets
             Received?.Invoke(message);
         }
 
+        internal void VoteForMap(uint round, bool training)
+        {
+            var bytes = new byte[6];
+            bytes[0] = (byte)RaidCommand.MapVote;
+            Buffer.BlockCopy(BitConverter.GetBytes(round), 0, bytes, 1, 4);
+            bytes[5] = training ? (byte)1 : (byte)0;
+            Send(bytes);
+        }
+
         public void SetNextRaidReady(uint completedRound, bool ready)
         {
             if (completedRound == 0) return;
@@ -423,7 +452,8 @@ namespace HeavyPockets
             Send(bytes);
         }
 
-        public void Open() => Send(new[] { (byte)RaidCommand.Open });
+        public void Open(byte container = 0) => Send(container == 0 ? new[] { (byte)RaidCommand.Open } :
+            new[] { (byte)RaidCommand.Open, container });
         internal void SetMechanism(byte id, bool open) =>
             Send(new[] { (byte)RaidCommand.SetMechanism, id, (byte)(open ? 1 : 0) });
         public void Close() => Send(new[] { (byte)RaidCommand.Close });

@@ -31,18 +31,20 @@ namespace HeavyPockets
         public const int BagCapacity = BagWidth * BagHeight;
         public const int CrateCells = CrateWidth * CrateHeight;
         public const int RandomTypeCount = 11;
-        public const int TypeCount = GearCatalog.ExpeditionPack;
+        public const byte FoldingRule = 21, SealSpool = 22, PunchTicket = 23;
+        public const int TypeCount = PunchTicket;
         private static readonly string[] Names =
         {
             "Неизвестный предмет", "Грузовой модуль", "Медная катушка",
             "Керамический предохранитель", "Латунный манометр", "Оптическая призма",
             "Шарикоподшипник", "Мультиметр", "Масляный фильтр", "Сигнальный фонарь",
             "Термодатчик", "Титановая муфта", "Карабин", "Пистолет", "Бронежилет", "Полевой рюкзак",
-            "Подсумок I", "Подсумок II", "Подсумок III", "Подсумок IV", "Экспедиционный рюкзак"
+            "Подсумок I", "Подсумок II", "Подсумок III", "Подсумок IV", "Экспедиционный рюкзак",
+            "Складной метр", "Пломбировочная проволока", "Книжка грузовых талонов"
         };
         // Nominal upright footprints shared by the authoritative simulation and HUD.
-        private static readonly byte[] Widths  = { 0, 2, 2, 1, 2, 1, 1, 1, 2, 1, 1, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2 };
-        private static readonly byte[] Heights = { 0, 2, 1, 1, 1, 1, 1, 2, 1, 2, 2, 1, 1, 1, 3, 2, 1, 1, 1, 1, 2 };
+        private static readonly byte[] Widths  = { 0, 2, 2, 1, 2, 1, 1, 1, 2, 1, 1, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1 };
+        private static readonly byte[] Heights = { 0, 2, 1, 1, 1, 1, 1, 2, 1, 2, 2, 1, 1, 1, 3, 2, 1, 1, 1, 1, 2, 1, 1, 1 };
 
         // Provisional rarity belongs to the catalog entry. A moved instance keeps its tier.
         private static readonly LootRarity[] Rarities =
@@ -53,7 +55,8 @@ namespace HeavyPockets
             // Carbine, pistol, armor and field pack.
             LootRarity.Epic, LootRarity.Rare, LootRarity.Epic, LootRarity.Rare,
             // Pouches I–IV and expedition pack.
-            LootRarity.Rare, LootRarity.Rare, LootRarity.Epic, LootRarity.Legendary, LootRarity.Legendary
+            LootRarity.Rare, LootRarity.Rare, LootRarity.Epic, LootRarity.Legendary, LootRarity.Legendary,
+            LootRarity.Common, LootRarity.Rare, LootRarity.Common
         };
         private static readonly string[] RarityNames = { "Обычный", "Редкий", "Эпический", "Легендарный" };
         public static LootRarity Rarity(byte type) => type <= TypeCount ? Rarities[type] : LootRarity.Common;

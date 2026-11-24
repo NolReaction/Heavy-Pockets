@@ -2,15 +2,15 @@ using UnityEngine;
 
 namespace HeavyPockets
 {
-    internal enum RaidScreen { Play, Menu, Animations, Receipt, Base, Lighting }
+    internal enum RaidScreen { Play, Menu, Animations, Receipt, Base, Lighting, Maps }
     internal enum RaidMenuAction { Resume, Bag, Animations, Base, Join, CancelQueue, Quit, Pouch1, Pouch2, Pouch3, Pouch4,
-        HarborDaylight, HarborPoster, HarborDusk, Lighting, BackToMenu }
+        HarborDaylight, HarborPoster, HarborDusk, Lighting, BackToMenu, Maps, ChangeMap }
 
     public sealed partial class RaidClient
     {
         private byte basePouchLevel = 1;
         private bool lightingLook;
-        private bool InPauseMenu => screen == RaidScreen.Menu || screen == RaidScreen.Animations || screen == RaidScreen.Lighting;
+        private bool InPauseMenu => screen == RaidScreen.Menu || screen == RaidScreen.Animations || screen == RaidScreen.Lighting || screen == RaidScreen.Maps;
 
         private void CloseMenuViews()
         {
@@ -42,7 +42,8 @@ namespace HeavyPockets
 
         internal void EscapePressed()
         {
-            if (disconnected || !HasOwnPose) return;
+            if (disconnected || !HasOwnPose || loadingMap) return;
+            if (screen == RaidScreen.Maps) { UseMenu(RaidMenuAction.BackToMenu); return; }
             if (screen == RaidScreen.Lighting) { UseMenu(RaidMenuAction.BackToMenu); return; }
             if (screen == RaidScreen.Animations) { LeaveAnimationPreview(); return; }
             if (screen == RaidScreen.Receipt) { UseMenu(RaidMenuAction.Base); return; }
@@ -76,6 +77,17 @@ namespace HeavyPockets
             }
             switch (action)
             {
+                case RaidMenuAction.Maps when screen == RaidScreen.Menu || screen == RaidScreen.Base:
+                    screen = RaidScreen.Maps;
+                    hud.ResetMenuInput();
+                    break;
+                case RaidMenuAction.ChangeMap when screen == RaidScreen.Maps && !disconnected && !loadingMap:
+                    Link.VoteForMap(round, votedForMap ? TrainingGround.Active : !TrainingGround.Active);
+                    break;
+                case RaidMenuAction.BackToMenu when screen == RaidScreen.Maps:
+                    screen = extracted ? RaidScreen.Base : RaidScreen.Menu;
+                    hud.ResetMenuInput();
+                    break;
                 case RaidMenuAction.Lighting when screen == RaidScreen.Menu:
                     lightingLook = false;
                     hud.OpenLightingControls();
@@ -118,6 +130,8 @@ namespace HeavyPockets
         }
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
+        internal bool ProbeMapReady => HasOwnPose && !loadingMap && (scenery == null || scenery.StreamingSettled);
+        internal int ProbeMapVotes => mapVotes;
         internal RaidScreen ProbeScreen => screen;
         internal bool ProbeInventoryOpen => inventoryOpen;
         internal bool ProbeQueued => queued && !changingQueue;

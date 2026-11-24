@@ -138,6 +138,10 @@ namespace HeavyPockets
 
         private readonly Dictionary<ulong, Runner> runners = new Dictionary<ulong, Runner>();
         private RaidScenery scenery;
+        private GameObject worldStage;
+        private bool renderedTraining, waitingForWorld, loadingMap, votedForMap;
+        private byte mapVotes, mapPlayers;
+        private readonly Queue<RaidEvent> pendingWorldEvents = new Queue<RaidEvent>();
         private Camera view;
         private int viewportWidth, viewportHeight;
         private float viewAspect = 16f / 9f;
@@ -196,11 +200,10 @@ namespace HeavyPockets
             hud.MenuAction = UseMenu;
             hud.MoveGear = RequestGearMove;
             hud.SelectGear = SelectEquipment;
+            renderedTraining = TrainingGround.Active;
             if ((Application.isBatchMode && !TrainingGround.Active) || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
                 return;
-            var stage = new GameObject("Freight harbor");
-            stage.transform.SetParent(transform, false);
-            scenery = new RaidScenery(stage.transform);
+            BuildMapView();
             var eye = new GameObject("Runner camera");
             eye.transform.SetParent(transform, false);
             view = eye.AddComponent<Camera>();
@@ -213,6 +216,39 @@ namespace HeavyPockets
             view.cullingMask &= ~(1 << AnimationStudio.Layer);
             eye.AddComponent<AudioListener>();
             eye.transform.position = new Vector3(0, 1.58f, -1f);
+        }
+
+        private void BuildMapView()
+        {
+            worldStage = new GameObject(renderedTraining ? "Training ground" : "Freight harbor");
+            worldStage.transform.SetParent(transform, false);
+            scenery = new RaidScenery(worldStage.transform);
+        }
+
+        private void ChangeMap(bool training)
+        {
+            renderedTraining = training;
+            PortCollisionWorld.Select(training, transform);
+            if (view == null) return;
+            loadingMap = waitingForWorld = true;
+            ReleaseCursor();
+            worldStage.SetActive(false);
+            scenery.Dispose();
+            Destroy(worldStage);
+            scenery = null;
+            StartCoroutine(LoadMapView());
+        }
+
+        private System.Collections.IEnumerator LoadMapView()
+        {
+            // Paint the loading screen; release old renderers before creating the next map.
+            yield return null;
+            yield return null;
+            while (!RaidScenery.ReleasedAllCells) yield return null;
+            if (disconnected) yield break;
+            BuildMapView();
+            waitingForWorld = false;
+            while (!waitingForWorld && pendingWorldEvents.Count > 0) Receive(pendingWorldEvents.Dequeue());
         }
 
         // Visual acceptance uses the same camera and HUD as a human player.
@@ -256,6 +292,12 @@ namespace HeavyPockets
 
         private void Receive(RaidEvent e)
         {
+            if (disconnected) return;
+            if (waitingForWorld)
+            {
+                pendingWorldEvents.Enqueue(e);
+                return;
+            }
             switch (e.Kind)
             {
                 case RaidEventKind.Gear:
@@ -264,12 +306,21 @@ namespace HeavyPockets
                 case RaidEventKind.PouchLevel:
                     basePouchLevel = e.PouchLevel;
                     break;
+                case RaidEventKind.MapVote:
+                    mapVotes = e.MapVotes;
+                    mapPlayers = e.MapPlayers;
+                    votedForMap = e.Voted;
+                    break;
                 case RaidEventKind.RaidStarted:
+                    if (renderedTraining != e.TrainingMap) ChangeMap(e.TrainingMap);
                     StartRound(e.Round);
                     break;
                 case RaidEventKind.Mechanism:
                     if (WorldMechanisms.TryGet(e.MechanismId, out var passage))
                         passage.SetMotion(e.FromSide, e.TargetSide, e.StartedAt);
+                    break;
+                case RaidEventKind.ContainerLid:
+                    scenery?.OpenContainerLid(e.ContainerId, e.StartedAt);
                     break;
                 case RaidEventKind.ScaleLoad:
                     ScaleKilograms = e.ScaleKilograms;
@@ -394,6 +445,8 @@ namespace HeavyPockets
         {
             CloseMenuViews();
             disconnected = true;
+            loadingMap = false;
+            pendingWorldEvents.Clear();
             ScaleKilograms = 0;
             ClearGear();
             HideInventory(false);
@@ -407,6 +460,9 @@ namespace HeavyPockets
             CloseMenuViews();
             captureOnSpawn = round != 0 || TrainingGround.Active;
             round = nextRound;
+            mapVotes = 0;
+            votedForMap = false;
+            scenery?.ResetContainerLids();
             screen = RaidScreen.Play;
             bagFromMenu = closeRequested = queued = changingQueue = extracted = false;
             HasOwnPose = false;
@@ -444,7 +500,14 @@ namespace HeavyPockets
         private void Update()
         {
             scenery?.TickLighting(Time.deltaTime);
+            scenery?.TickContainerLids();
             scenery?.TickStreaming(HasOwnPose ? OwnPosition : Vector2.zero);
+            if (loadingMap)
+            {
+                if (waitingForWorld || !HasOwnPose || scenery == null || !scenery.StreamingSettled) return;
+                loadingMap = false;
+                if (!ScriptedInput && Application.isFocused && screen == RaidScreen.Play) CaptureCursor();
+            }
             if (Link == null || !HasOwnPose || disconnected)
                 return;
             WeighPlatform();
@@ -642,7 +705,7 @@ namespace HeavyPockets
                     else if (Input.GetKeyDown(KeyCode.E))
                     {
                         if (crateOpen) CloseInventory(true);
-                        else if (!closeRequested) Link.Open();
+                        else if (!closeRequested && RaidContainers.Closest(OwnPosition,OwnMotion,out byte target)) Link.Open(target);
                     }
                     else if (crateOpen && (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)))
                         hud.TransferSelection(InventoryState());
@@ -653,7 +716,16 @@ namespace HeavyPockets
                 }
                 else
                 {
-                    if (Input.GetMouseButtonDown(0)) CaptureCursor();
+                    if (Input.GetMouseButtonDown(0))
+                    {
+                        if (view != null)
+                        {
+                            var ray = Cursor.lockState == CursorLockMode.Locked
+                                ? view.ViewportPointToRay(new Vector3(.5f,.5f)) : view.ScreenPointToRay(Input.mousePosition);
+                            if (RaidContainers.UnderPointer(ray,OwnPosition,OwnMotion,out byte target)) Link.Open(target);
+                        }
+                        CaptureCursor();
+                    }
                     if (Cursor.lockState == CursorLockMode.Locked)
                     {
                         RunnerInput.Look(ref yaw, ref pitch);
@@ -680,6 +752,7 @@ namespace HeavyPockets
             if (!HasOwnPose || extracted || disconnected || screen != RaidScreen.Play) return;
             var passage = WorldMechanisms.Closest(OwnPosition, OwnMotion);
             if (passage != null) Link.SetMechanism(passage.Id, !passage.IsOpen);
+            else if (RaidContainers.Closest(OwnPosition, OwnMotion, out byte target)) Link.Open(target);
             else Link.Open();
         }
 
@@ -704,6 +777,7 @@ namespace HeavyPockets
                 Connected = HasOwnPose,
                 Disconnected = disconnected,
                 Screen = screen, Queued = queued, ChangingQueue = changingQueue,
+                LoadingMap = loadingMap, VotedForMap = votedForMap, MapVotes = mapVotes, MapPlayers = mapPlayers,
                 BasePouchLevel = basePouchLevel,
                 ExtractedItems = extractedItems,
                 BagItems = inventory.Bag,

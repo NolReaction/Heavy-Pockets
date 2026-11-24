@@ -7,10 +7,14 @@ param(
     [switch]$CaptureMotion,
     [switch]$SurfacesOnly,
     [switch]$ChartHouseOnly,
-    [switch]$WarehouseOnly
+    [switch]$WarehouseOnly,
+    [switch]$MapSwitchOnly
 )
 
 $ErrorActionPreference = 'Stop'
+if ($MapSwitchOnly -and ($HeadlessClients -or $WarehouseOnly -or $ChartHouseOnly -or $SurfacesOnly)) {
+    throw 'The map switch route needs two graphical clients and its own session.'
+}
 if ($ChartHouseOnly -and ($HeadlessClients -or $SurfacesOnly)) {
     throw 'The chart house check needs two graphical clients and its own route.'
 }
@@ -72,15 +76,19 @@ try {
     if ($SurfacesOnly) { $options += '-probeSurfaces' }
     if ($ChartHouseOnly) { $options += '-probeChartHouse' }
     if ($WarehouseOnly) { $options += '-probeWarehouse' }
+    if ($MapSwitchOnly) { $options += '-probeMapSwitch' }
     if ($HeadlessClients) { $options += @('-batchmode','-nographics') }
     $a = Start-Player 'A' $clientExe ($options + @('-probeRole','A'))
     Wait-For 'first client connection' { Test-Path -LiteralPath (Join-Path $run 'A.connected') } 60
+    if ($MapSwitchOnly) {
+        Wait-For 'solo client switched map before admitting the second' { Test-Path -LiteralPath (Join-Path $run 'A.joined-training') } 60
+    }
     $b = Start-Player 'B' $clientExe ($options + @('-probeRole','B'))
     [IO.File]::WriteAllText((Join-Path $run 'processes.json'), (@{
         server = $server.Id; A = $a.Id; B = $b.Id; headlessClients = $HeadlessClients.IsPresent
         captureFrames = ($ShowClients.IsPresent -and !$HeadlessClients.IsPresent)
     } | ConvertTo-Json))
-    if (!$SurfacesOnly -and !$ChartHouseOnly -and !$WarehouseOnly) {
+    if (!$SurfacesOnly -and !$ChartHouseOnly -and !$WarehouseOnly -and !$MapSwitchOnly) {
         Wait-For 'blocked open before loot generation' { Test-Path -LiteralPath (Join-Path $run 'A.wall-denied') } 45
         $generated = 'HEAVY POCKETS CRATE GENERATED after authorized open'
         if (Select-String -Quiet -LiteralPath $serverLog -SimpleMatch $generated) {
@@ -94,11 +102,18 @@ try {
     foreach ($client in $a,$b) {
         if (-not $client.WaitForExit(15000) -or $client.ExitCode -ne 0) { throw "Client did not exit cleanly: $($client.Id)" }
     }
-    if ($WarehouseOnly) {
-        foreach ($mark in 'B.saw-opening','B.swing-blocked','A.weighed','B.closed-outside','A.opened-inside','B.both-through','A.double-load','B.double-load','A.single-load','B.gate-blocked','B.gate-closed','A.raised-outside','B.gate-crossed') {
+    if ($MapSwitchOnly) {
+        foreach ($mark in 'A.joined-training','B.joined-training','B.offered0','B.withdrawn0','A.arrived0','B.arrived0','B.offered1','B.withdrawn1','A.arrived1','B.arrived1') {
             if (!(Test-Path -LiteralPath (Join-Path $run $mark))) { throw "Missing $mark" }
         }
-        Write-Host 'Both players operated the two-way door and shutter, blocked occupied passages and shared the floor-scale load.'
+        Write-Host 'A late joiner loaded the active training round. Both players then chose, withdrew and confirmed two map changes, retaining their connection.'
+        return
+    }
+    if ($WarehouseOnly) {
+        foreach ($mark in 'B.saw-opening','B.swing-blocked','A.weighed','B.closed-outside','A.opened-inside','B.both-through','A.double-load','B.double-load','A.single-load','B.gate-blocked','B.gate-closed','A.raised-outside','B.gate-crossed','A.two-cases-verified','B.two-cases-verified') {
+            if (!(Test-Path -LiteralPath (Join-Path $run $mark))) { throw "Missing $mark" }
+        }
+        Write-Host 'Both players operated the two-way door and shutter, blocked occupied passages and shared the floor-scale load, and moved a single physical item between two independently searched cargo boxes.'
         return
     }
     if ($ChartHouseOnly) {

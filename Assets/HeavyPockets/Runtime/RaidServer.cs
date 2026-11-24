@@ -33,13 +33,24 @@ namespace HeavyPockets
             public float InputLeft;
             public float ExitSeconds;
             public bool Viewing;
-            public readonly LootSearch Search = new LootSearch();
+            public byte Container, RevealedLids;
+            public bool Searching;
+            private readonly Dictionary<byte,LootSearch> searches = new Dictionary<byte,LootSearch>();
+            public LootSearch Search
+            {
+                get
+                {
+                    if (!searches.TryGetValue(Container,out var current)) searches[Container] = current = new LootSearch();
+                    return current;
+                }
+            }
             public uint LastTransfer;
             public GearLocation ActiveGear = GearLocation.Primary;
             public bool Exited;
             public uint Round;
             public bool Entered, Queued;
             public bool AtBase;
+            public bool WantsMapChange;
             public byte PouchLevel = 1;
             public byte ReportedScaleLoad;
             public readonly HashSet<ulong> VisibleActors = new HashSet<ulong>();
@@ -57,6 +68,7 @@ namespace HeavyPockets
         private uint round = 1;
         private int nextSlot;
         private float untilSnapshot;
+        private bool mapBallotDirty, hadMapVotes;
 
         public RaidServer(NetworkManager net, string auditPath = null, Func<ulong, bool> mayPlay = null, bool pairedSpawn = false)
         {
@@ -92,6 +104,7 @@ namespace HeavyPockets
             if (!players.TryGetValue(id, out var player))
                 return;
             players.Remove(id);
+            mapBallotDirty = true;
             if (!player.Exited && net.IsListening)
             {
                 AnnounceDeparture(id);
@@ -108,7 +121,7 @@ namespace HeavyPockets
             bool first = slot % 2 == 0;
             var player = new Player { Id = id, Round = round, Position = RaidMap.Spawn(slot), Yaw = first ? 51f : -109f };
             if (TrainingGround.Active) player.Yaw = -8f;
-            if (pairedSpawn)
+            if (pairedSpawn && !TrainingGround.Active)
             {
                 // Look across the open lane south of the three practice crates.
                 player.Position = new Vector2(first ? -4f : -14.2f, -8.6f);
@@ -123,8 +136,9 @@ namespace HeavyPockets
                 player.PouchLevel = previous.PouchLevel;
             }
             players[id] = player;
+            mapBallotDirty = true;
             loot.IssueKit(id, player.PouchLevel);
-            Send(id, new RaidEvent { Kind = RaidEventKind.RaidStarted, Round = round });
+            Send(id, new RaidEvent { Kind = RaidEventKind.RaidStarted, Round = round, TrainingMap = TrainingGround.Active });
             foreach (var passage in WorldMechanisms.Active) Send(id, PassageState(passage));
             Send(id, Pose(player));
             SendGear(player);
@@ -173,10 +187,10 @@ namespace HeavyPockets
             LootItem[] items;
             LootFootprint[] outlines = null;
             if (kind == RaidEventKind.Crate)
-                loot.CrateView(player.Search.Identified, out items, out outlines);
+                loot.CrateView(player.Search.Identified, out items, out outlines, player.Container);
             else
                 items = kind == RaidEventKind.Result ? loot.ExtractedLoot(player.Id) : loot.Bag(player.Id);
-            float remaining = outlines != null && outlines.Length > 0 ? player.Search.Remaining(loot) : 0f;
+            float remaining = outlines != null && outlines.Length > 0 ? player.Search.Remaining(loot, player.Container) : 0f;
             Send(player.Id, new RaidEvent { Kind = kind, Items = items, Unknown = outlines, SearchRemaining = remaining });
         }
 
@@ -203,6 +217,17 @@ namespace HeavyPockets
                 return;
             audit?.Write("rx", sender, RaidWire.Commands, bytes);
             RaidCommand command = (RaidCommand)bytes[0];
+            if (command == RaidCommand.MapVote)
+            {
+                if (bytes.Length != 6 || bytes[5] > 1 || BitConverter.ToUInt32(bytes, 1) != player.Round) return;
+                bool vote = (bytes[5] == 1) != TrainingGround.Active;
+                if (player.WantsMapChange != vote)
+                {
+                    player.WantsMapChange = vote;
+                    mapBallotDirty = true;
+                }
+                return;
+            }
             if (command == RaidCommand.EnterBase)
             {
                 if (bytes.Length == 1 && player.Exited) player.AtBase = true;
@@ -258,6 +283,8 @@ namespace HeavyPockets
             }
             bool transfer = command == RaidCommand.Take || command == RaidCommand.Store;
             int expected = command == RaidCommand.Place ? 14 : transfer ? 9 : 1;
+            if (command == RaidCommand.Open && bytes.Length == 2 && bytes[1] > 0 && bytes[1] < RaidContainers.Count)
+                expected = 2;
             if (bytes.Length != expected || bytes[0] < (byte)RaidCommand.Open ||
                 bytes[0] > (byte)RaidCommand.Place)
                 return;
@@ -276,20 +303,7 @@ namespace HeavyPockets
             switch (command)
             {
                 case RaidCommand.Open:
-                    if (!RaidMap.CanOpen(player.Position, player.Motion))
-                    {
-                        bool closeEnough = RaidMap.WithinReach(player.Position, player.Motion.Height);
-                        Status(player, closeEnough ? RaidStatus.Blocked : RaidStatus.OutOfRange);
-                        return;
-                    }
-                    if (!loot.CrateGenerated)
-                    {
-                        loot.GenerateCrate();
-                        Debug.Log("HEAVY POCKETS CRATE GENERATED after authorized open");
-                    }
-                    player.Viewing = true;
-                    Status(player, RaidStatus.Opened);
-                    SendInventory(player, RaidEventKind.Crate);
+                    OpenContainer(player, bytes.Length == 2 ? bytes[1] : (byte)0);
                     break;
                 case RaidCommand.Close:
                     player.Viewing = false;
@@ -393,7 +407,7 @@ namespace HeavyPockets
             if ((flags & 0xF0) != 0) { Status(player, RaidStatus.Denied, sequence); return; }
             bool fromBag = exact ? (flags & 1) != 0 : command == RaidCommand.Store;
             bool toBag = exact ? (flags & 2) != 0 : command == RaidCommand.Take;
-            if ((!fromBag || !toBag) && (!player.Viewing || !RaidMap.CanOpen(player.Position, player.Motion)))
+            if ((!fromBag || !toBag) && (!player.Viewing || !player.Searching || !RaidMap.CanOpen(player.Position, player.Motion, player.Container)))
             {
                 bool lostCrate = player.Viewing;
                 player.Viewing = false;
@@ -404,20 +418,47 @@ namespace HeavyPockets
             uint id = BitConverter.ToUInt32(bytes, 5);
             RaidStatus status = loot.Transfer(player.Id, player.Search.Identified, id, fromBag, toBag, !exact,
                 exact ? bytes[10] : 0, exact ? bytes[11] : 0, (flags & 4) != 0,
-                exact ? bytes[12] : 0, exact ? bytes[13] : 0, (flags & 8) != 0);
+                exact ? bytes[12] : 0, exact ? bytes[13] : 0, (flags & 8) != 0, player.Container);
             Status(player, status, sequence);
             if (status != RaidStatus.Placed && status != RaidStatus.Taken && status != RaidStatus.Stored) return;
             if (fromBag || toBag) SendInventory(player, RaidEventKind.Bag);
             if (fromBag && toBag) return;
             foreach (Player viewer in players.Values)
-                if (viewer.Viewing && !viewer.Exited && RaidMap.CanOpen(viewer.Position, viewer.Motion))
+                if (SeesContents(viewer, player.Container))
                     SendInventory(viewer, RaidEventKind.Crate);
+        }
+
+        private void UpdateMapBallot()
+        {
+            mapBallotDirty = false;
+            int votes = 0;
+            foreach (var member in players.Values)
+                if (member.WantsMapChange) votes++;
+            if (votes > 0 && votes == players.Count)
+            {
+                PortCollisionWorld.Select(!TrainingGround.Active, net.transform);
+                loot = new RaidLoot();
+                untilSnapshot = 0f;
+                nextSlot = 0;
+                round = round == uint.MaxValue ? 1 : round + 1;
+                // Keep connection admission, rate limits and each player's base pouch level.
+                var members = new List<Player>(players.Values);
+                foreach (var member in members) BeginRaid(member.Id, member);
+                hadMapVotes = false;
+                return;
+            }
+            if (votes == 0 && !hadMapVotes) return;
+            hadMapVotes = votes > 0;
+            foreach (var member in players.Values)
+                Send(member.Id, new RaidEvent { Kind = RaidEventKind.MapVote, MapVotes = (byte)votes,
+                    MapPlayers = (byte)players.Count, Voted = member.WantsMapChange });
         }
 
         public void Tick(float deltaSeconds)
         {
             if (!net.IsListening || deltaSeconds <= 0f || !RaidWire.Finite(deltaSeconds))
                 return;
+            if (mapBallotDirty) UpdateMapBallot();
             untilSnapshot -= deltaSeconds;
             bool snapshot = untilSnapshot <= 0f;
             if (snapshot)
@@ -444,13 +485,12 @@ namespace HeavyPockets
                 player.IdleSeconds = (player.Position - before).sqrMagnitude > 0.00000001f ? 0f :
                     Mathf.Min(1f, player.IdleSeconds + deltaSeconds);
                 UpdateCamera(player, deltaSeconds);
-                if (player.Viewing && !RaidMap.CanOpen(player.Position, player.Motion))
+                if (player.Viewing && !RaidMap.CanOpen(player.Position, player.Motion, player.Container))
                 {
                     player.Viewing = false;
                     Status(player, RaidStatus.CrateLost);
                 }
-                if (player.Viewing && player.Search.Advance(loot, deltaSeconds))
-                    SendInventory(player, RaidEventKind.Crate);
+                UpdateContainerSearch(player, deltaSeconds, snapshot);
                 UpdateExit(player, deltaSeconds, snapshot);
                 hadExtraction |= player.Exited;
                 if (!player.Exited && WarehouseFloorScale.Supports(player.Position, player.Motion))

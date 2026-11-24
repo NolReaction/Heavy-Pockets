@@ -39,16 +39,21 @@ namespace HeavyPockets
             return index >= 0 && index + 1 < args.Length ? args[index + 1] : fallback;
         }
 
+        internal static void ConfigureTiming()
+        {
+            Application.runInBackground = true;
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = 60;
+            Time.fixedDeltaTime = 1f / 30f;
+        }
+
         private void Begin()
         {
             try
             {
                 if (!ushort.TryParse(Option("-port", "17777"), out ushort port) || port == 0)
                     throw new ArgumentException("Expected -port 1..65535.");
-                Application.runInBackground = true;
-                QualitySettings.vSyncCount = 0;
-                Application.targetFrameRate = 60;
-                Time.fixedDeltaTime = 1f / 30f;
+                ConfigureTiming();
                 network = gameObject.AddComponent<NetworkManager>();
                 var transport = gameObject.AddComponent<UnityTransport>();
                 network.NetworkConfig = new NetworkConfig
@@ -59,9 +64,9 @@ namespace HeavyPockets
                     TickRate = 30,
                     ConnectionApproval = true,
 #if HEAVY_POCKETS_EOS
-                    ProtocolVersion = 30
+                    ProtocolVersion = 32
 #else
-                    ProtocolVersion = 29
+                    ProtocolVersion = 31
 #endif
                 };
 #if HEAVY_POCKETS_EOS

@@ -25,6 +25,7 @@ namespace HeavyPockets
         private sealed class TileRequest
         {
             private static readonly Dictionary<string, TileRequest> active = new Dictionary<string, TileRequest>();
+            internal static bool Idle => active.Count == 0;
             internal readonly ResourceRequest Request;
             private readonly string path;
             private int references;
@@ -71,6 +72,8 @@ namespace HeavyPockets
         }
         private Vector2 lastStreamingPoint = new Vector2(float.PositiveInfinity, 0f);
         internal bool StreamingSettled { get; private set; }
+        // A cancelled cell can still finish loading borrowed meshes from the other map.
+        internal static bool ReleasedAllCells => TileRequest.Idle;
         internal int LoadedCellCount { get; private set; }
 
         private void InitializeStreaming()
@@ -96,6 +99,9 @@ namespace HeavyPockets
 
         private void MountDistantWarehouseLeaves(Transform parent, Vector3 parentOrigin)
         {
+            var center = (TrainingGround.Active ? TrainingBuildings.Warehouse : ReceivingWarehouseLayout.Origin) - parentOrigin;
+            Part(parent, "Distant receiving floor", center.x, center.y - .045f, center.z,
+                ReceivingWarehouseLayout.Width, .09f, ReceivingWarehouseLayout.Depth, concrete);
             var mechanism = WorldMechanisms.PlacedWarehouseDoor;
             var hinge = mechanism.Pivot - parentOrigin;
             var leaf = Panel(parent, "Distant personnel door", hinge.x, hinge.y, hinge.z, 0);
@@ -142,6 +148,8 @@ namespace HeavyPockets
                     if (door != null)
                     {
                         WorldMechanisms.PlacedWarehouseDoor.Bind(door);
+                        MountFreightCases(instance);
+                        Object.Instantiate(Resources.Load<GameObject>("DispatchDesk"), instance, false);
                         if (TrainingGround.Active) BuildWarehouseFloorFinish(instance);
                     }
                     var gate = instance.Find(ReceivingWarehouseLayout.GateLeafName);

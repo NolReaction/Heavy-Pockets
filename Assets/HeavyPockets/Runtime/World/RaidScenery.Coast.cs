@@ -36,6 +36,8 @@ namespace HeavyPockets
             // Keep the 4 m shoreline samples at the quay. Spacing grows to 16 m in the distant hills.
             var xs = CoastSamples(-340, 420, -96, 116);
             var zs = CoastSamples(-364, 364, -80, 80);
+            var foundation = ReceivingWarehouseLayout.Foundation(ReceivingWarehouseLayout.Origin);
+            foundation.Split(xs,zs);
             int columns = xs.Count, rows = zs.Count;
             var vertices = new List<Vector3>(columns * rows);
             var colors = new List<Color32>(columns * rows);
@@ -48,7 +50,7 @@ namespace HeavyPockets
                     float x = xs[column];
                     vertices.Add(new Vector3(x, CoastHeight(x,z) - .035f, z));
                     colors.Add(new Color(.54f + .46f * Noise(x, z, .043f), Meadow(x,z), 0));
-                    if (row == 0 || column == 0) continue;
+                    if (row == 0 || column == 0 || foundation.Covers(xs[column-1],x,zs[row-1],z)) continue;
                     int d = row * columns + column, a = d - columns - 1;
                     indices.Add(a); indices.Add(d - 1); indices.Add(d);
                     indices.Add(a); indices.Add(d); indices.Add(a + 1);

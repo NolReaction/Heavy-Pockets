@@ -9,7 +9,8 @@ namespace HeavyPockets
         {
             public bool Connected, Disconnected, Crate, Inventory;
             public RaidScreen Screen;
-            public bool Queued, ChangingQueue;
+            public bool Queued, ChangingQueue, LoadingMap, VotedForMap;
+            public byte MapVotes, MapPlayers;
             public LootItem[] BagItems, CrateItems, ExtractedItems;
             public LootItem[] Gear;
             public byte BasePouchLevel;
@@ -47,7 +48,8 @@ namespace HeavyPockets
             bool inventoryVisible = state.Connected && !state.Disconnected && state.Screen == RaidScreen.Play && state.Inventory;
             if (inventoryVisible && !showingInventory) openingTime = Time.unscaledTime;
             showingInventory = inventoryVisible;
-            if (state.Connected && !state.Disconnected && state.Screen == RaidScreen.Animations)
+            if (state.LoadingMap && !state.Disconnected) DrawMapLoading(width, height);
+            else if (state.Connected && !state.Disconnected && state.Screen == RaidScreen.Animations)
                 DrawAnimationPreview(width, height);
             else if (state.Connected && !state.Disconnected && state.Screen == RaidScreen.Lighting)
                 DrawLightingControls(width, height);
@@ -60,12 +62,17 @@ namespace HeavyPockets
             else if (Event.current.type == EventType.Repaint)
             {
                 DrawLocation(edge, edge);
+                if (state.MapVotes > 0)
+                {
+                    Panel(edge, edge + 53, 205, 30);
+                    Text(edge + 10, edge + 53, 188, 30, $"Смена карты {state.MapVotes}/{state.MapPlayers}   ·   Esc → Карты", 12, Paper);
+                }
                 DrawBag(state, width - edge - 164f, edge);
                 DrawFieldQuickbar(state, width - edge - 164f, edge + 51f);
                 Crosshair(mid, height * 0.5f);
                 if (RaidMap.InExit(state.Position))
                     DrawExit(mid, height - 122f, state.Seconds);
-                else if (RaidMap.CanOpen(state.Position, state.Motion))
+                else if (RaidContainers.Closest(state.Position, state.Motion, out _))
                     Hint(mid, height - 106f, "Обыскать ящик", Amber);
                 else if (WorldMechanisms.Closest(state.Position, state.Motion) is WorldMechanism passage && !passage.Moving)
                 {

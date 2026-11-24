@@ -7,6 +7,7 @@ namespace HeavyPockets
     {
         internal static readonly Vector3 Origin = new Vector3(-38f, 0f, 25f);
         internal const float Width = 14f, Height = 5f, Depth = 9f;
+        internal static GroundOpening Foundation(Vector3 origin) => new GroundOpening(origin, Width, Depth);
         internal const float DoorWidth = 1.08f, DoorHeight = 2.10f, DoorThickness = .045f;
         internal const string DoorLeafName = "Personnel door";
         internal static readonly Vector3 DoorHinge = Origin + new Vector3(4.66f, .04f, -4.43f);
@@ -57,6 +58,7 @@ namespace HeavyPockets
             boxes.Add(Desk);
             boxes.AddRange(Racks);
             boxes.AddRange(Freight);
+            boxes.AddRange(RaidContainers.WarehouseBoxes);
             for (int i = 0; i < boxes.Count; ++i)
             {
                 var b = boxes[i];

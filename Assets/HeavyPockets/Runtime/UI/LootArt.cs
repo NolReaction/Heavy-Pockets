@@ -4,7 +4,7 @@ namespace HeavyPockets
 {
     internal static class LootArt
     {
-        private static Texture2D salvageAtlas, equipmentAtlas;
+        private static Texture2D salvageAtlas, equipmentAtlas, dispatchAtlas;
 
         // Pixel bounds of each illustration in the source artwork (top-left origin).
         private static readonly RectInt[] Bounds =
@@ -24,6 +24,11 @@ namespace HeavyPockets
 
         private static Texture2D Atlas(byte type)
         {
+            if (type >= LootCatalog.FoldingRule)
+            {
+                if (dispatchAtlas == null) dispatchAtlas = Resources.Load<Texture2D>("DispatchLoot");
+                return dispatchAtlas;
+            }
             if (type <= Bounds.Length)
             {
                 if (salvageAtlas == null) salvageAtlas = Resources.Load<Texture2D>("HeavyPocketsLoot");
@@ -35,6 +40,12 @@ namespace HeavyPockets
 
         private static Rect GetUV(byte type)
         {
+            if (type >= LootCatalog.FoldingRule)
+            {
+                float column = type - LootCatalog.FoldingRule;
+                bool wide = type == LootCatalog.FoldingRule;
+                return new Rect(column / 3f, wide ? .25f : 0f, 1f / 3f, wide ? .50f : 1f);
+            }
             bool salvage = type <= Bounds.Length;
             RectInt bounds = salvage ? Bounds[type - 1] : EquipmentBounds[type - 1 - Bounds.Length];
             float width = salvage ? 1448f : 1200f, height = salvage ? 1086f : 1200f;

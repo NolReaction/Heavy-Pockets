@@ -15,12 +15,12 @@ namespace HeavyPockets
         internal Material GrovePaint { private get; set; }
 
         internal static GameObject Create(Transform parent, Vector2 center, Vector2 size,
-            Func<Vector2, float, bool> excludeGrass = null)
+            Func<Vector2, float, bool> excludeGrass = null, GroundOpening foundation = default)
         {
             var field = new GameObject("Coastal surface garden").AddComponent<CoastalSurfaceField>();
             field.transform.SetParent(parent, false);
             field.transform.localPosition = new Vector3(center.x, 0, center.y);
-            field.Build(size, center, excludeGrass);
+            field.Build(size, center, excludeGrass, foundation);
             return field.gameObject;
         }
 
@@ -50,32 +50,41 @@ namespace HeavyPockets
                 Mathf.Lerp(dry, .84f, east), meadow * (1f - east));
         }
 
-        private void Build(Vector2 size, Vector2 center, Func<Vector2, float, bool> excludeGrass)
+        private static List<float> GroundAxis(float center, float size)
         {
-            int nx = Mathf.Max(1, Mathf.CeilToInt(size.x / 1.35f));
-            int nz = Mathf.Max(1, Mathf.CeilToInt(size.y / 1.35f));
+            int cells = Mathf.Max(1, Mathf.CeilToInt(size / 1.35f));
+            var axis = new List<float>(cells + 3);
+            for (int i = 0; i <= cells; i++) axis.Add(center + (i / (float)cells - .5f) * size);
+            return axis;
+        }
+
+        private void Build(Vector2 size, Vector2 center, Func<Vector2, float, bool> excludeGrass, GroundOpening foundation)
+        {
+            var xs = GroundAxis(center.x, size.x);
+            var zs = GroundAxis(center.y, size.y);
+            foundation.Split(xs,zs);
+            int nx = xs.Count - 1, nz = zs.Count - 1;
             var vertices = new Vector3[(nx + 1) * (nz + 1)];
             var colors = new Color32[vertices.Length];
             var normals = new Vector3[vertices.Length];
-            var triangles = new int[nx * nz * 6];
+            var triangles = new List<int>(nx * nz * 6);
             for (int j = 0; j <= nz; j++)
                 for (int i = 0; i <= nx; i++)
                 {
                     int k = j * (nx + 1) + i;
-                    float u = i / (float)nx - .5f, v = j / (float)nz - .5f;
-                    vertices[k] = new Vector3(u * size.x, 0, v * size.y);
+                    float x = xs[i] - center.x, z = zs[j] - center.y;
+                    vertices[k] = new Vector3(x, 0, z);
                     normals[k] = Vector3.up;
-                    colors[k] = Layers(u * 144f, v * 112f);
-                    if (i == nx || j == nz) continue;
-                    int t = 6 * (j * nx + i);
-                    triangles[t] = k; triangles[t + 1] = k + nx + 1; triangles[t + 2] = k + nx + 2;
-                    triangles[t + 3] = k; triangles[t + 4] = k + nx + 2; triangles[t + 5] = k + 1;
+                    colors[k] = Layers(x * 144f / size.x, z * 112f / size.y);
+                    if (i == nx || j == nz || foundation.Covers(xs[i],xs[i+1],zs[j],zs[j+1])) continue;
+                    triangles.Add(k); triangles.Add(k + nx + 1); triangles.Add(k + nx + 2);
+                    triangles.Add(k); triangles.Add(k + nx + 2); triangles.Add(k + 1);
                 }
             var ground = new Mesh { name = "Coastal surface paint", indexFormat = vertices.Length > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
             ground.vertices = vertices;
             ground.normals = normals;
             ground.colors32 = colors;
-            ground.triangles = triangles;
+            ground.SetTriangles(triangles,0);
             Mount(gameObject, ground, Resources.Load<Material>("SurfaceGarden/Coastal surface"));
             blades = new Material(Resources.Load<Material>("SurfaceGarden/Meadow blades")) { name = "Grass underfoot" };
             var random = new System.Random(27147);

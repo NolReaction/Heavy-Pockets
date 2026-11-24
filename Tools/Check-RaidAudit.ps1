@@ -15,8 +15,8 @@ function Read-Marker([string]$name) {
     return [IO.File]::ReadAllText((Join-Path $RunDirectory $name)).Trim()
 }
 # Independent description of the published wire grid and type footprints.
-$widths = @(0,2,2,1,2,1,1,1,2,1,1,2,3,2,2,2,2,2,2,2,2)
-$heights = @(0,2,1,1,1,1,1,2,1,2,2,1,1,1,3,2,1,1,1,1,2)
+$widths = @(0,2,2,1,2,1,1,1,2,1,1,2,3,2,2,2,2,2,2,2,2,2,1,1)
+$heights = @(0,2,1,1,1,1,1,2,1,2,2,1,1,1,3,2,1,1,1,1,2,1,1,1)
 function Read-Audit([string]$name) {
     $path = Join-Path $RunDirectory "$name.jsonl"
     # Server still owns its open stream. Always read with shared access.
@@ -87,7 +87,7 @@ function Read-Audit([string]$name) {
                         $x = [int]$bytes[$offset + 5]
                         $y = [int]$bytes[$offset + 6]
                         $rot = [int]$bytes[$offset + 7]
-                        Require ($uid -ne 0 -and $uid -notin $items -and $type -ge 1 -and $type -le 20 -and $rot -in 0,1) "$name invalid item"
+                        Require ($uid -ne 0 -and $uid -notin $items -and $type -ge 1 -and $type -lt $widths.Count -and $rot -in 0,1) "$name invalid item"
                         $w = if ($rot) { $heights[$type] } else { $widths[$type] }
                         $h = if ($rot) { $widths[$type] } else { $heights[$type] }
                         Require ($x + $w -le $columns -and $y + $h -le $rows) "$name item crosses grid edge"
@@ -135,7 +135,11 @@ function Read-Audit([string]$name) {
                             elseif ($slot -eq 3) { Require ($type -eq 14) "$name incompatible armor" }
                             elseif ($slot -eq 4) { Require ($type -in 15,20) "$name incompatible backpack" }
                             elseif ($slot -eq 5) { Require ($type -in 16..19) "$name incompatible pouch" }
-                            else { Require ($type -in 2..11 -and $slot-5 -le $gearTypes[5]-15) "$name incompatible or locked pocket" }
+                            else {
+                                $cargo = $type -in 1..11 -or ($type -ge 21 -and $type -lt $widths.Count)
+                                $fits = $cargo -and ($widths[$type] * $heights[$type] -le 2)
+                                Require ($fits -and $slot-5 -le $gearTypes[5]-15) "$name incompatible or locked pocket"
+                            }
                         }
                         $gearIds += $uid
                         $gearTypes += $type
@@ -145,24 +149,29 @@ function Read-Audit([string]$name) {
                     Require ($bytes.Length -eq 2 -and $bytes[1] -in 1..4) "$name invalid base loadout event"
                     $pouchLevel = [int]$bytes[1]
                 } elseif ($code -eq 12) {
-                    Require ($bytes.Length -eq 12 -and $bytes[1] -in 0,1) "$name invalid passage snapshot"
+                    Require ($bytes.Length -eq 12 -and $bytes[1] -in 0,1,2,3) "$name invalid passage snapshot"
                     $mechanism = [int]$bytes[1]
-                    $minimum = if ($mechanism -eq 0) { 0 } else { 1 }
+                    $minimum = if ($mechanism % 2 -eq 0) { 0 } else { 1 }
                     $startedAt = [BitConverter]::ToDouble($bytes,4)
                     Require ($bytes[2] -in $minimum..2 -and $bytes[3] -in $minimum..2 -and
                         ($bytes[2] -eq 1 -or $bytes[3] -eq 1) -and $startedAt -ge 0 -and
                         ![double]::IsInfinity($startedAt)) "$name invalid passage movement"
                     $doorOpen = $bytes[3] -ne 1
+                } elseif ($code -eq 15) {
+                    $when = if ($bytes.Length -eq 10) { [BitConverter]::ToDouble($bytes,2) } else { -1 }
+                    Require ($when -ge 0 -and ![double]::IsInfinity($when) -and $bytes[1] -in 0..2) "$name invalid public container animation"
                 } elseif ($code -eq 13) {
                     Require ($bytes.Length -eq 2 -and $bytes[1] -in 0,75,150,200) "$name invalid scale reading"
                     $scaleKilograms = [int]$bytes[1]
                 } else {
-                    $length = @{ 1 = 31; 2 = 9; 6 = 6; 7 = 5; 8 = 5; 9 = 6 }[[int]$code]
+                    $length = @{ 1 = 31; 2 = 9; 6 = 6; 7 = 5; 8 = 6; 9 = 6; 21 = 4 }[[int]$code]
+                    if ($code -eq 21) { Require ($bytes.Length -eq 4 -and $bytes[2] -in 1..4 -and $bytes[1] -le $bytes[2] -and $bytes[3] -in 0,1) "$name invalid map vote count" }
                     Require ($null -ne $length -and $bytes.Length -eq $length) "$name unexpected public event fields"
                     if ($code -in 8,9) {
                         $round = [long][BitConverter]::ToUInt32($bytes,1)
                         Require ($round -gt 0) "$name invalid round number"
                         if ($code -eq 8) {
+                            Require ($bytes[5] -in 0,1) "$name invalid raid map"
                             Require ($round -eq 1 + [long]$currentRound[$streamId]) "$name skipped or repeated a raid start"
                             $currentRound[$streamId] = $round
                         } else {
@@ -230,8 +239,12 @@ function Read-Audit([string]$name) {
                             Require ($bytes[5] -in 0,1) "$name invalid readiness flag"
                             $queued = [int]$bytes[5]
                         }
+                    } elseif ($code -eq 21) {
+                        Require ($bytes.Length -eq 6 -and $bytes[5] -in 0,1 -and [BitConverter]::ToUInt32($bytes,1) -gt 0) "$name invalid map vote"
                     } elseif ($code -eq 13) {
                         Require ($bytes.Length -eq 3 -and $bytes[1] -in 0,1 -and $bytes[2] -in 0,1) "$name invalid passage control request"
+                    } elseif ($code -eq 2 -and $bytes.Length -eq 2) {
+                        Require ($bytes[1] -in 1,2) "$name unknown cargo box"
                     } else { Require ($code -in 2,3 -and $bytes.Length -eq 1) "$name unknown command" }
                 }
             }
@@ -643,7 +656,7 @@ foreach ($role in 'A','B') {
     # Compare each ordered direction separately. The simulation may still be sending movement
     # snapshots during process shutdown, so compare all discrete events and actions here.
     foreach ($channel in 'event','command') {
-        $included = if ($channel -eq 'event') { @(3,4,5,6,8,9,10,11,12) } else { @(2,3,4,5,6,7,8,9,10,11,12,13) }
+        $included = if ($channel -eq 'event') { @(3,4,5,6,8,9,10,11,12,15) } else { @(2,3,4,5,6,7,8,9,10,11,12,13) }
         $serverBytes = @($stream | Where-Object { $_.channel -eq $channel -and $_.code -in $included })
         $clientBytes = @($client | Where-Object { $_.channel -eq $channel -and $_.code -in $included })
         Require (($serverBytes.payload -join ',') -ceq ($clientBytes.payload -join ',')) "$role $channel bytes differ across round boundary"

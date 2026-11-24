@@ -75,7 +75,7 @@ namespace HeavyPockets
             p.Apply(model, propMeshes);
         }
 
-        private static bool TryBuildCustomChest(Transform anchor)
+        private bool TryBuildCustomChest(Transform anchor)
         {
             var prefab = Resources.Load<GameObject>("CargoChest");
             if (prefab == null) return false;
@@ -114,6 +114,8 @@ namespace HeavyPockets
             fit.SetParent(anchor, false);
             fit.localScale = scale;
             fit.localPosition = -Vector3.Scale(scale, new Vector3(bounds.center.x, bounds.min.y, bounds.center.z));
+            Transform hinge = instance.transform.Find("Lid");
+            if (hinge) BindContainerLid(0, hinge, 76f * Mathf.Sign(hinge.localPosition.z));
             return true;
         }
 

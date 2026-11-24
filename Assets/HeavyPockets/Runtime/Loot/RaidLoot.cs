@@ -13,16 +13,16 @@ namespace HeavyPockets
         private uint target;
         private float elapsed;
 
-        internal float Remaining(RaidLoot loot)
+        internal float Remaining(RaidLoot loot, byte container = 0)
         {
-            uint next = loot.NextUnknown(Identified);
+            uint next = loot.NextUnknown(Identified, container);
             if (next != target) { target = next; elapsed = 0f; }
             return target == 0 ? 0f : LootCatalog.SearchItemSeconds - elapsed;
         }
 
-        internal bool Advance(RaidLoot loot, float delta)
+        internal bool Advance(RaidLoot loot, float delta, byte container = 0)
         {
-            if (Remaining(loot) <= 0f) return false;
+            if (Remaining(loot, container) <= 0f) return false;
             elapsed += delta;
             if (elapsed < LootCatalog.SearchItemSeconds) return false;
             Identified.Add(target);
@@ -39,16 +39,25 @@ namespace HeavyPockets
             public LootItem Item;
             public ulong? Owner; // null denotes the shared crate.
             public GearLocation Location;
+            public byte Container;
         }
 
         private readonly List<Slot> slots = new List<Slot>();
         private readonly HashSet<uint> issued = new HashSet<uint>();
         private readonly HashSet<uint> crateLoot = new HashSet<uint>();
-        internal bool CrateGenerated { get; private set; }
-
-        internal void GenerateCrate()
+        private readonly HashSet<byte> generated = new HashSet<byte>();
+        private readonly Dictionary<byte,double> opened = new Dictionary<byte,double>();
+        internal bool CrateGenerated => generated.Contains(0);
+        internal bool Generated(byte container) => generated.Contains(container);
+        internal bool HasOpened(byte container, out double time) => opened.TryGetValue(container, out time);
+        internal void Unlatch(byte container, double time)
         {
-            if (CrateGenerated) return;
+            if (!opened.ContainsKey(container)) opened.Add(container, time);
+        }
+
+        internal void GenerateCrate(byte container = 0)
+        {
+            if (generated.Contains(container)) return;
             using (var rng = RandomNumberGenerator.Create())
             {
                 var scratch = new byte[4];
@@ -63,11 +72,19 @@ namespace HeavyPockets
                     cargo.Add(types[selected]);
                     types[selected] = types[i];
                 }
-                cargo.Add(GearCatalog.FieldPack);
-                cargo.Add(GearCatalog.ExpeditionPack);
-                for (byte level = 0; level < 4; level++)
-                    cargo.Add((byte)(GearCatalog.FirstPouch + level));
-                cargo.Add((byte)(GearCatalog.Carbine + RandomIndex(rng, scratch, 3)));
+                if (container == 0)
+                {
+                    cargo.Add(GearCatalog.FieldPack);
+                    cargo.Add(GearCatalog.ExpeditionPack);
+                    for (byte level = 0; level < 4; level++)
+                        cargo.Add((byte)(GearCatalog.FirstPouch + level));
+                    cargo.Add((byte)(GearCatalog.Carbine + RandomIndex(rng, scratch, 3)));
+                }
+                else
+                {
+                    cargo.Add(container == 1 ? LootCatalog.FoldingRule : LootCatalog.PunchTicket);
+                    cargo.Add(LootCatalog.SealSpool);
+                }
                 var placed = new LootItem[cargo.Count];
                 int area = 0;
                 for (int i = 0; i < cargo.Count; i++)
@@ -84,9 +101,9 @@ namespace HeavyPockets
                 foreach (var item in placed)
                 {
                     crateLoot.Add(item.Id);
-                    slots.Add(new Slot { Item = item, Location = GearLocation.Crate });
+                    slots.Add(new Slot { Item = item, Location = GearLocation.Crate, Container = container });
                 }
-                CrateGenerated = true;
+                generated.Add(container);
             }
         }
 
@@ -142,13 +159,13 @@ namespace HeavyPockets
 
         private static int Anchor(LootItem item) => item.Y * LootCatalog.CrateWidth + item.X;
 
-        internal uint NextUnknown(HashSet<uint> identified)
+        internal uint NextUnknown(HashSet<uint> identified, byte container = 0)
         {
             int earliest = int.MaxValue;
             uint id = 0;
             foreach (var slot in slots)
             {
-                if (slot.Owner.HasValue || identified.Contains(slot.Item.Id)) continue;
+                if (slot.Owner.HasValue || slot.Container != container || identified.Contains(slot.Item.Id)) continue;
                 int anchor = Anchor(slot.Item);
                 if (anchor >= earliest) continue;
                 earliest = anchor;
@@ -157,13 +174,13 @@ namespace HeavyPockets
             return id;
         }
 
-        internal void CrateView(HashSet<uint> identified, out LootItem[] known, out LootFootprint[] outlines)
+        internal void CrateView(HashSet<uint> identified, out LootItem[] known, out LootFootprint[] outlines, byte container = 0)
         {
             var items = new List<LootItem>();
             var hidden = new List<LootFootprint>();
             foreach (var slot in slots)
             {
-                if (slot.Owner.HasValue) continue;
+                if (slot.Owner.HasValue || slot.Container != container) continue;
                 if (identified.Contains(slot.Item.Id)) items.Add(slot.Item);
                 else hidden.Add(LootFootprint.Of(slot.Item));
             }
@@ -172,22 +189,22 @@ namespace HeavyPockets
             outlines = hidden.ToArray();
         }
 
-        private LootItem[] Contents(ulong? owner)
+        private LootItem[] Contents(ulong? owner, byte container = 0)
         {
             var contents = new List<LootItem>();
             foreach (var slot in slots)
-                if (slot.Owner == owner && slot.Location == (owner.HasValue ? GearLocation.Bag : GearLocation.Crate)) contents.Add(slot.Item);
+                if (slot.Owner == owner && (owner.HasValue || slot.Container == container) && slot.Location == (owner.HasValue ? GearLocation.Bag : GearLocation.Crate)) contents.Add(slot.Item);
             return contents.ToArray();
         }
 
         internal LootItem[] Bag(ulong player) => Contents(player);
 
         internal RaidStatus Transfer(ulong player, HashSet<uint> identified, uint itemId, bool fromBag, bool toBag,
-            bool automatic, int x, int y, bool rotated, int originalX, int originalY, bool originalRotated)
+            bool automatic, int x, int y, bool rotated, int originalX, int originalY, bool originalRotated, byte container = 0)
         {
             int index = slots.FindIndex(slot => slot.Item.Id == itemId);
             ulong? source = fromBag ? player : (ulong?)null;
-            if (index < 0 || slots[index].Owner != source || slots[index].Location != (fromBag ? GearLocation.Bag : GearLocation.Crate) || (!fromBag && !identified.Contains(itemId)))
+            if (index < 0 || slots[index].Owner != source || slots[index].Location != (fromBag ? GearLocation.Bag : GearLocation.Crate) || (!fromBag && (slots[index].Container != container || !identified.Contains(itemId))))
                 return fromBag ? RaidStatus.Denied : RaidStatus.Empty;
 
             var item = slots[index].Item;
@@ -195,7 +212,7 @@ namespace HeavyPockets
                 return RaidStatus.Stale;
             ulong? destination = toBag ? player : (ulong?)null;
             int rows = toBag ? GearCatalog.BagRows(Gear(player)) : LootCatalog.BagHeight;
-            LootItem[] occupants = Contents(destination);
+            LootItem[] occupants = Contents(destination, container);
             if (automatic)
             {
                 if (!LootCatalog.FindSpace(occupants, item, toBag, out x, out y, out rotated, null, rows))
@@ -207,7 +224,7 @@ namespace HeavyPockets
             item.X = (byte)x;
             item.Y = (byte)y;
             item.Rotated = rotated;
-            slots[index] = new Slot { Item = item, Owner = destination, Location = toBag ? GearLocation.Bag : GearLocation.Crate };
+            slots[index] = new Slot { Item = item, Owner = destination, Container = container, Location = toBag ? GearLocation.Bag : GearLocation.Crate };
             if (!toBag) identified.Add(item.Id);
             return fromBag == toBag ? RaidStatus.Placed : toBag ? RaidStatus.Taken : RaidStatus.Stored;
         }

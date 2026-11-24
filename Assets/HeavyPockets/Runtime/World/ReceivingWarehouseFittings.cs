@@ -89,6 +89,7 @@ namespace HeavyPockets
             {
                 site.GetComponent<MeshFilter>().sharedMesh=shell;
                 site.GetComponent<MeshRenderer>().sharedMaterial=outer;
+                BuildRoofShadow(site.transform,outer);
                 var room=new Batch(); Room(room); Fixtures(room);
                 Mount(site.transform,"Receiving room",room.Save("Warehouse interior",Dir+"Receiving room.asset"),paint);
                 var odds=new Batch(); Stock(odds); Desk(odds);
@@ -115,6 +116,22 @@ namespace HeavyPockets
                 AssetDatabase.SaveAssets();
             }
             finally {Object.DestroyImmediate(site);}
+        }
+
+        // The facade and interior ceiling meet at an eave. Give the shadow pass the
+        // entire structural slab so a grazing sun cannot shine between those skins.
+        private static void BuildRoofShadow(Transform parent, Material material)
+        {
+            var roof = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            roof.name = "Structural roof shadow";
+            roof.transform.SetParent(parent,false);
+            roof.transform.localPosition = ReceivingWarehouseLayout.Roof.center;
+            roof.transform.localScale = ReceivingWarehouseLayout.Roof.size;
+            Object.DestroyImmediate(roof.GetComponent<Collider>());
+            var renderer = roof.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
+            renderer.receiveShadows = false;
         }
 
         private static MeshRenderer Mount(Transform parent,string name,Mesh mesh,Material mat)

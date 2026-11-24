@@ -9,6 +9,7 @@ namespace HeavyPockets
     {
         internal const string ScenePath = "Assets/HeavyPockets/TrainingGround.unity";
         internal static bool Active { get; private set; }
+        internal static void Select(bool training) => Active = training;
         internal static readonly Vector2 Spawn = new Vector2(1f, -28f);
         internal static readonly Vector2 Chest = new Vector2(4f, -24f);
         internal static readonly Vector2 Extraction = new Vector2(62f, 42f);
@@ -44,6 +45,7 @@ namespace HeavyPockets
 
         private void Begin()
         {
+            RaidBootstrap.ConfigureTiming();
             host = gameObject.AddComponent<NetworkManager>();
             host.NetworkConfig = new NetworkConfig
             {

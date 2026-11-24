@@ -7,11 +7,12 @@ namespace HeavyPockets
     {
         internal Action<RaidMenuAction> MenuAction;
         private static readonly RaidMenuAction[] PauseButtons = { RaidMenuAction.Resume, RaidMenuAction.Animations,
-            RaidMenuAction.Lighting, RaidMenuAction.Bag, RaidMenuAction.Quit };
+            RaidMenuAction.Maps, RaidMenuAction.Lighting, RaidMenuAction.Bag, RaidMenuAction.Quit };
+        private static readonly RaidMenuAction[] MapButtons = { RaidMenuAction.ChangeMap, RaidMenuAction.BackToMenu };
         private static readonly RaidMenuAction[] ReceiptButtons = { RaidMenuAction.Base };
-        private static readonly RaidMenuAction[] BaseButtons = { RaidMenuAction.Join, RaidMenuAction.Quit,
+        private static readonly RaidMenuAction[] BaseButtons = { RaidMenuAction.Join, RaidMenuAction.Maps, RaidMenuAction.Quit,
             RaidMenuAction.Pouch1, RaidMenuAction.Pouch2, RaidMenuAction.Pouch3, RaidMenuAction.Pouch4 };
-        private static readonly RaidMenuAction[] QueueButtons = { RaidMenuAction.CancelQueue, RaidMenuAction.Quit };
+        private static readonly RaidMenuAction[] QueueButtons = { RaidMenuAction.CancelQueue, RaidMenuAction.Maps, RaidMenuAction.Quit };
         private static readonly RaidMenuAction[] DisconnectButtons = { RaidMenuAction.Quit };
         private RaidMenuAction? pressedButton;
         private RaidMenuAction[] currentButtons;
@@ -24,7 +25,7 @@ namespace HeavyPockets
         private RaidMenuAction[] Buttons(State s)
         {
             var actions = s.Disconnected ? DisconnectButtons : !s.Connected ? Array.Empty<RaidMenuAction>() :
-                s.Screen == RaidScreen.Menu ? PauseButtons : s.Screen == RaidScreen.Receipt ? ReceiptButtons :
+                s.Screen == RaidScreen.Menu ? PauseButtons : s.Screen == RaidScreen.Maps ? MapButtons : s.Screen == RaidScreen.Receipt ? ReceiptButtons :
                 s.Screen == RaidScreen.Base ? (s.Queued ? QueueButtons : BaseButtons) : Array.Empty<RaidMenuAction>();
             if (actions != currentButtons)
             {
@@ -66,6 +67,9 @@ namespace HeavyPockets
         {
             switch (action)
             {
+                case RaidMenuAction.Maps: return "Карты";
+                case RaidMenuAction.ChangeMap: return state.VotedForMap ? "Отозвать голос" : MapName(!TrainingGround.Active);
+                case RaidMenuAction.BackToMenu: return "Назад";
                 case RaidMenuAction.Resume: return "Продолжить";
                 case RaidMenuAction.Bag: return "Открыть рюкзак";
                 case RaidMenuAction.Animations: return "Анимации";
@@ -91,17 +95,17 @@ namespace HeavyPockets
                 HeaderY = Mathf.Round(Mathf.Clamp(height * .20f, 78f, 150f));
                 HeaderHeight = receipt ? 96f : 76f;
                 hasPouches = count == BaseButtons.Length;
-                int railRows = hasPouches ? 2 : count;
+                int railRows = hasPouches ? 3 : count;
                 float footer = count == PauseButtons.Length ? 24f : 108f;
                 ActionY = Mathf.Min(HeaderY + HeaderHeight + 55f, height - footer - railRows * 44f);
             }
 
             internal Rect Button(int index)
             {
-                if (!hasPouches || index < 2)
+                if (!hasPouches || index < 3)
                     return new Rect(Margin, ActionY + index * 44f, Rail - Margin * 2f, 38f);
                 float tile = Mathf.Min(150f, (Width - Rail - Margin * 2f - 10f) * .5f);
-                int slot = index - 2;
+                int slot = index - 3;
                 return new Rect(Rail + Margin + (slot % 2) * (tile + 8f),
                     HeaderY + 45f + (slot / 2) * 63f, tile, 56f);
             }
@@ -137,12 +141,26 @@ namespace HeavyPockets
             return false;
         }
 
+        private static string MapName(bool training) => training ? "Учебный полигон" : "Грузовой порт";
+
+        private void DrawMapLoading(float width, float height)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            Block(0, 0, width, height, StationInk);
+            float x = width * .5f - 159f, y = height * .48f;
+            Text(x, y - 52, 318, 24, "ЗАГРУЗКА КАРТЫ", 13, Mint, true);
+            Text(x, y - 27, 318, 46, MapName(TrainingGround.Active), 31, Paper, true);
+            Block(x, y + 34, 318, 3, StationRow);
+            Block(x + Mathf.PingPong(Time.unscaledTime * 110f, 238f), y + 34, 80, 3, Mint);
+        }
+
         private void DrawSessionScreen(State s, float width, float height)
         {
             var actions = Buttons(s);
             bool receipt = s.Connected && !s.Disconnected && s.Screen == RaidScreen.Receipt;
             bool atBase = s.Connected && !s.Disconnected && s.Screen == RaidScreen.Base;
-            bool paused = s.Connected && !s.Disconnected && s.Screen == RaidScreen.Menu;
+            bool maps = s.Connected && !s.Disconnected && s.Screen == RaidScreen.Maps;
+            bool paused = s.Connected && !s.Disconnected && (s.Screen == RaidScreen.Menu || maps);
             var layout = new StationLayout(width, height, receipt, actions.Length);
             Vector3 mouse = Input.mousePosition;
             Vector2 point = new Vector2(mouse.x, Screen.height - mouse.y) * (width / Screen.width);
@@ -175,7 +193,7 @@ namespace HeavyPockets
             for (int i = 0; i < 8; i++) Block(edge - 8 + i, y + i + 1, 1, h - i - 1, Paper);
             Block(0, y, 5, h, accent);
             string title = s.Disconnected ? "Связь потеряна" : !s.Connected ? "Подключение…" :
-                receipt ? "Эвакуация" : atBase ? "База" : "Меню рейда";
+                receipt ? "Эвакуация" : atBase ? "База" : maps ? "Карты" : "Меню рейда";
             if (receipt)
             {
                 Text(margin, y + 6, layout.Rail - margin, 48, title, 36, StationInk, true);
@@ -186,9 +204,20 @@ namespace HeavyPockets
 
             string status = s.Disconnected ? "Соединение с сервером закрыто." : !s.Connected ? "Ожидаем ответ сервера." :
                 receipt ? (s.ExtractedItems.Length == 0 ? "Рюкзак пуст." : "") :
+                maps ? "Сейчас здесь · " + MapName(TrainingGround.Active) :
                 paused ? "Сетевой рейд продолжается." :
                 s.Queued ? "Ждём завершения рейда других игроков." : "Готов к новому рейду.";
             if (status.Length > 0) Text(margin, y + h + 8, layout.Rail - margin - 10, 28, status, 13, Muted);
+            if (maps)
+            {
+                float x = layout.Rail + margin, w = Mathf.Min(width - x - margin, 372f);
+                Block(x, y, w, 114, StationInk);
+                Block(x, y, w, 3, Mint);
+                Text(x + 14, y + 9, w - 24, 30, "Новый рейд для группы", 19, Paper, true);
+                Text(x + 14, y + 42, w - 24, 23, "На новой карте у всех будет стартовый комплект.", 13, Muted);
+                string votes = s.MapVotes > 0 ? $"Готовы к переходу · {s.MapVotes} из {s.MapPlayers}" : "Переход начнётся, когда карту выберут все.";
+                Text(x + 14, y + 70, w - 24, 28, votes, 14, Mint);
+            }
             if (receipt && s.ExtractedItems.Length > 0) DrawManifest(s.ExtractedItems, layout);
             if (atBase && !s.Queued)
                 Text(layout.Rail + margin, layout.HeaderY, 310, 35, "Подсумок для рейда", 21, Paper, true);

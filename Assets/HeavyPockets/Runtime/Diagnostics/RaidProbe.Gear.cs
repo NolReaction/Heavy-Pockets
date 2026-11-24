@@ -61,9 +61,14 @@ namespace HeavyPockets
                 if (gearSlots[slot].Id == 0 || !GearCatalog.Accepts((GearLocation)slot, gearSlots[slot].Type) ||
                     string.IsNullOrEmpty(LootCatalog.Description(gearSlots[slot].Type)))
                 { Fail("Missing issued equipment or item description in slot " + slot); yield break; }
-            for (byte type = GearCatalog.Carbine; type <= LootCatalog.TypeCount; type++)
-                if (LootCatalog.Rarity(type) < LootRarity.Rare || LootCatalog.Rarity(type) > LootRarity.Legendary)
-                { Fail("Equipment outside the three supported rarity tiers: " + type); yield break; }
+            for (var slot = GearLocation.Primary; slot <= GearLocation.Pouch; slot++)
+                for (byte type = 1; type <= LootCatalog.TypeCount; type++)
+                {
+                    if (!GearCatalog.Accepts(slot, type)) continue;
+                    var rarity = LootCatalog.Rarity(type);
+                    if (rarity < LootRarity.Rare || rarity > LootRarity.Legendary)
+                    { Fail("Equipment outside the three supported rarity tiers: " + type); yield break; }
+                }
             if (GearCatalog.PouchLevel(gearSlots) != 2 || GearCatalog.BagRows(gearSlots) != 6 ||
                 GearCatalog.Available(GearLocation.PouchCell3, gearSlots))
             { Fail("Base loadout was not carried into the new raid"); yield break; }
