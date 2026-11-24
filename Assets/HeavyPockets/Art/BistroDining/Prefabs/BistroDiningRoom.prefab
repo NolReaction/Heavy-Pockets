@@ -1,5 +1,102 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &777145438609016242
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2138317274869058125}
+  - component: {fileID: 4354550281194687682}
+  m_Layer: 0
+  m_Name: "Daylight \xB7 west display"
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2138317274869058125
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 777145438609016242}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.096223675, y: 0.7005291, z: -0.096223675, w: 0.7005291}
+  m_LocalPosition: {x: -5.65, y: 2.52, z: 0.4}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6999518735743158121}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!108 &4354550281194687682
+Light:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 777145438609016242}
+  m_Enabled: 1
+  serializedVersion: 12
+  m_Type: 0
+  m_Color: {r: 0.85490197, g: 0.9098039, b: 0.972549, a: 1}
+  m_Intensity: 1.15
+  m_Range: 7.8
+  m_SpotAngle: 132
+  m_InnerSpotAngle: 78
+  m_CookieSize2D: {x: 0.5, y: 0.5}
+  m_Shadows:
+    m_Type: 0
+    m_Resolution: -1
+    m_CustomResolution: -1
+    m_Strength: 1
+    m_Bias: 0.05
+    m_NormalBias: 0.4
+    m_NearPlane: 0.2
+    m_CullingMatrixOverride:
+      e00: 1
+      e01: 0
+      e02: 0
+      e03: 0
+      e10: 0
+      e11: 1
+      e12: 0
+      e13: 0
+      e20: 0
+      e21: 0
+      e22: 1
+      e23: 0
+      e30: 0
+      e31: 0
+      e32: 0
+      e33: 1
+    m_UseCullingMatrixOverride: 0
+  m_Cookie: {fileID: 0}
+  m_DrawHalo: 0
+  m_Flare: {fileID: 0}
+  m_RenderMode: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 3221225471
+  m_RenderingLayerMask: 1
+  m_Lightmapping: 4
+  m_LightShadowCasterMode: 0
+  m_AreaSize: {x: 1, y: 1}
+  m_BounceIntensity: 1
+  m_ColorTemperature: 6570
+  m_UseColorTemperature: 0
+  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
+  m_UseBoundingSphereOverride: 0
+  m_UseViewFrustumForShadowCasterCull: 1
+  m_ForceVisible: 0
+  m_ShadowRadius: 0
+  m_ShadowAngle: 0
+  m_LightUnit: 1
+  m_LuxAtDistance: 1
+  m_EnableSpotReflector: 1
 --- !u!1 &2977544182806721765
 GameObject:
   m_ObjectHideFlags: 0
@@ -80,6 +177,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6999518735743158121}
+  - component: {fileID: 5930142482112162600}
   m_Layer: 0
   m_Name: BistroDiningRoom
   m_TagString: Untagged
@@ -109,8 +207,216 @@ Transform:
   - {fileID: 114829075585100590}
   - {fileID: 362304943136806086}
   - {fileID: 4721493048035030949}
+  - {fileID: 4502278939923474568}
+  - {fileID: 2138317274869058125}
+  - {fileID: 4037512083040148934}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5930142482112162600
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3349400909660210994}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39dc401fa86d418daf77c7258e510450, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::HeavyPockets.InteriorDaylight
+  windows:
+  - {fileID: 4354550281194687682}
+  - {fileID: 8320318659140339218}
+  lamps:
+  - {fileID: 5584675503641671725}
+  - {fileID: 2725881327151351404}
+  - {fileID: 2397208703432489348}
+  - {fileID: 7333458991059720935}
+  windowStrength: 1.15
+  lampsByDay: 0.72
+  lampsAtNight: 2.45
+--- !u!1 &3520078300710601828
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4037512083040148934}
+  - component: {fileID: 8320318659140339218}
+  m_Layer: 0
+  m_Name: "Daylight \xB7 south display"
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4037512083040148934
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3520078300710601828}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.13608083, y: 0, z: 0, w: 0.99069774}
+  m_LocalPosition: {x: 1.65, y: 2.45, z: -6.5}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6999518735743158121}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!108 &8320318659140339218
+Light:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3520078300710601828}
+  m_Enabled: 1
+  serializedVersion: 12
+  m_Type: 0
+  m_Color: {r: 0.85490197, g: 0.9098039, b: 0.972549, a: 1}
+  m_Intensity: 1.15
+  m_Range: 7.8
+  m_SpotAngle: 132
+  m_InnerSpotAngle: 78
+  m_CookieSize2D: {x: 0.5, y: 0.5}
+  m_Shadows:
+    m_Type: 0
+    m_Resolution: -1
+    m_CustomResolution: -1
+    m_Strength: 1
+    m_Bias: 0.05
+    m_NormalBias: 0.4
+    m_NearPlane: 0.2
+    m_CullingMatrixOverride:
+      e00: 1
+      e01: 0
+      e02: 0
+      e03: 0
+      e10: 0
+      e11: 1
+      e12: 0
+      e13: 0
+      e20: 0
+      e21: 0
+      e22: 1
+      e23: 0
+      e30: 0
+      e31: 0
+      e32: 0
+      e33: 1
+    m_UseCullingMatrixOverride: 0
+  m_Cookie: {fileID: 0}
+  m_DrawHalo: 0
+  m_Flare: {fileID: 0}
+  m_RenderMode: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 3221225471
+  m_RenderingLayerMask: 1
+  m_Lightmapping: 4
+  m_LightShadowCasterMode: 0
+  m_AreaSize: {x: 1, y: 1}
+  m_BounceIntensity: 1
+  m_ColorTemperature: 6570
+  m_UseColorTemperature: 0
+  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
+  m_UseBoundingSphereOverride: 0
+  m_UseViewFrustumForShadowCasterCull: 1
+  m_ForceVisible: 0
+  m_ShadowRadius: 0
+  m_ShadowAngle: 0
+  m_LightUnit: 1
+  m_LuxAtDistance: 1
+  m_EnableSpotReflector: 1
+--- !u!1 &4673148024083034694
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4502278939923474568}
+  - component: {fileID: 8056601936135100667}
+  - component: {fileID: 1182033667206275063}
+  m_Layer: 0
+  m_Name: Dining room reflections
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4502278939923474568
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4673148024083034694}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 1.8, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6999518735743158121}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!215 &8056601936135100667
+ReflectionProbe:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4673148024083034694}
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Type: 0
+  m_Mode: 2
+  m_RefreshMode: 0
+  m_TimeSlicingMode: 0
+  m_Resolution: 128
+  m_UpdateFrequency: 0
+  m_BoxSize: {x: 13.45, y: 3.54, z: 16}
+  m_BoxOffset: {x: 0, y: 0, z: 0}
+  m_NearClip: 0.3
+  m_FarClip: 1000
+  m_ShadowDistance: 100
+  m_ClearFlags: 1
+  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IntensityMultiplier: 1
+  m_BlendDistance: 0.28
+  m_HDR: 1
+  m_BoxProjection: 1
+  m_RenderDynamicObjects: 0
+  m_UseOcclusionCulling: 1
+  m_Importance: 2
+  m_CustomBakedTexture: {fileID: 8900000, guid: c801d461a6ad32a4b88f1348ed06040c, type: 3}
+--- !u!114 &1182033667206275063
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4673148024083034694}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb5a917994ba4f528a99e21c019711f4, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::HeavyPockets.RoomReflection
+  dayIntensity: 1
+  nightIntensity: 0.38
+  quarterTurns:
+  - {fileID: 8900000, guid: c801d461a6ad32a4b88f1348ed06040c, type: 3}
+  - {fileID: 8900000, guid: 0b89d94e2b11e3340b1f1543f216015c, type: 3}
+  - {fileID: 8900000, guid: 116adffab49dbb744adda6479d4ab4d9, type: 3}
+  - {fileID: 8900000, guid: 2783b44d88c6dc04484512c66183f7b1, type: 3}
 --- !u!1 &8180010684428923341
 GameObject:
   m_ObjectHideFlags: 0
@@ -492,6 +798,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6804644817001229432, guid: 1728fe5916a626143b4a34e96a944712, type: 3}
   m_PrefabInstance: {fileID: 2299343254641253341}
   m_PrefabAsset: {fileID: 0}
+--- !u!108 &7333458991059720935 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 8803770469197496634, guid: 1728fe5916a626143b4a34e96a944712, type: 3}
+  m_PrefabInstance: {fileID: 2299343254641253341}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &2682766879719461219
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -735,6 +1046,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 1728fe5916a626143b4a34e96a944712, type: 3}
+--- !u!108 &5584675503641671725 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 8803770469197496634, guid: 1728fe5916a626143b4a34e96a944712, type: 3}
+  m_PrefabInstance: {fileID: 4012010525255039255}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &7621060580978972015 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6804644817001229432, guid: 1728fe5916a626143b4a34e96a944712, type: 3}
@@ -1050,6 +1366,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6804644817001229432, guid: 1728fe5916a626143b4a34e96a944712, type: 3}
   m_PrefabInstance: {fileID: 6587040045344372926}
   m_PrefabAsset: {fileID: 0}
+--- !u!108 &2397208703432489348 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 8803770469197496634, guid: 1728fe5916a626143b4a34e96a944712, type: 3}
+  m_PrefabInstance: {fileID: 6587040045344372926}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &6659608049264256374
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1172,6 +1493,11 @@ PrefabInstance:
 --- !u!4 &114829075585100590 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6804644817001229432, guid: 1728fe5916a626143b4a34e96a944712, type: 3}
+  m_PrefabInstance: {fileID: 6915558732871845718}
+  m_PrefabAsset: {fileID: 0}
+--- !u!108 &2725881327151351404 stripped
+Light:
+  m_CorrespondingSourceObject: {fileID: 8803770469197496634, guid: 1728fe5916a626143b4a34e96a944712, type: 3}
   m_PrefabInstance: {fileID: 6915558732871845718}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &7481324241871924538

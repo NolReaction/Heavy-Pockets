@@ -60,7 +60,7 @@ namespace HeavyPockets
                 new Color32(255,216,169,255),2.02f,7.8f,0f,false);
             ChartHouseLight(site,"Отражение света от штукатурки",LightType.Point,P(2f,2.15f,.7f),Vector3.zero,
                 new Color32(198,213,225,255),.76f,5.9f,0f,false);
-            chartHouseReflection = f.InstallReflection(site);
+            f.InstallReflection(site);
             if (TrainingGround.Active) BuildChartFloorFinish(site);
         }
 

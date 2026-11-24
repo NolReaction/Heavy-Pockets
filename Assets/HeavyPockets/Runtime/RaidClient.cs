@@ -543,7 +543,7 @@ namespace HeavyPockets
                             int side = Input.GetKeyDown(KeyCode.RightArrow) ? 1 : Input.GetKeyDown(KeyCode.LeftArrow) ? -1 : 0;
                             hud.AnimationPreviewKey(step, side, enter || Input.GetKeyDown(KeyCode.Space));
                         }
-                        else if (screen == RaidScreen.Lighting)
+                        else if (ViewingSettings)
                             UpdateLightingLook();
                         else if (enter || step != 0) hud.MenuKey(InventoryState(), step, enter);
                     }
@@ -864,6 +864,7 @@ namespace HeavyPockets
                 inventoryLooking = false;
                 lightingLook = false;
                 hud?.CloseLightingControls();
+                if (screen == RaidScreen.Graphics) hud?.CloseGraphicsControls();
                 if (!ScriptedInput)
                 {
                     hud?.CancelDrag();

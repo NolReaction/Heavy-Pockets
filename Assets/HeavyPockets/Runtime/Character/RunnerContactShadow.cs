@@ -13,19 +13,32 @@ namespace HeavyPockets
         private static readonly int RightToe = Shader.PropertyToID("_RightToe");
         private MaterialPropertyBlock properties;
         private Renderer decal;
-        private Sole left, right;
+        [SerializeField] private Sole left, right;
 
         internal void Bind(RunnerRig rig)
         {
-            properties = new MaterialPropertyBlock();
-            decal = GetComponent<Renderer>();
             left = new Sole(rig.Bone(HumanBodyBones.LeftFoot), rig.Bone(HumanBodyBones.LeftToes), transform.parent);
             right = new Sole(rig.Bone(HumanBodyBones.RightFoot), rig.Bone(HumanBodyBones.RightToes), transform.parent);
         }
 
+        private void OnEnable()
+        {
+            properties ??= new MaterialPropertyBlock();
+            if (!decal) decal = GetComponent<Renderer>();
+            if (left.IsBound && right.IsBound) return;
+
+            // An actor already running when this component was first recompiled lacks serialized soles.
+            var actor = transform.parent;
+            var animator = actor ? actor.GetComponentInChildren<Animator>(true) : null;
+            if (animator && animator.avatar && animator.avatar.isValid && animator.avatar.isHuman)
+                Bind(new RunnerRig(animator.gameObject));
+        }
+
         private void LateUpdate()
         {
-            Vector3 position = transform.parent.position;
+            var actor = transform.parent;
+            if (!decal || !actor) return;
+            Vector3 position = actor.position;
             float support = RaidMap.FloorBelow(new Vector2(position.x, position.z), position.y);
             float flight = Mathf.Clamp01(position.y - support);
             transform.position = new Vector3(position.x, support + .011f, position.z);
@@ -33,15 +46,17 @@ namespace HeavyPockets
             // fade independently as the heel rolls up and the toe leaves the floor.
             properties.SetVector(Body, new Vector4(2.6f - flight * .4f, 3.2f - flight * .5f,
                 Mathf.Lerp(.21f, .07f, flight), 0f));
-            left.Write(properties, LeftHeel, LeftToe, support);
-            right.Write(properties, RightHeel, RightToe, support);
+            if (left.IsBound) left.Write(properties, LeftHeel, LeftToe, support);
+            if (right.IsBound) right.Write(properties, RightHeel, RightToe, support);
             decal.SetPropertyBlock(properties);
         }
 
-        private sealed class Sole
+        [System.Serializable]
+        private struct Sole
         {
-            private readonly Transform ankle, toe;
-            private readonly Vector3 heelLocal, toeLocal;
+            [SerializeField] private Transform ankle, toe;
+            [SerializeField] private Vector3 heelLocal, toeLocal;
+            internal bool IsBound => ankle && toe;
 
             internal Sole(Transform ankle, Transform toe, Transform actor)
             {

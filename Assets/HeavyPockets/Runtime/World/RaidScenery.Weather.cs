@@ -5,8 +5,6 @@ namespace HeavyPockets
 {
     internal sealed partial class RaidScenery
     {
-        private ReflectionProbe chartHouseReflection;
-
         private struct SceneLighting
         {
             public AmbientMode Mode;
@@ -73,8 +71,8 @@ namespace HeavyPockets
             float overcast = Blend(.53f, 1f, clouds);
             float dusk = 1f - Blend(-.16f, .18f, height);
             Shader.SetGlobalFloat("_HarborDusk", dusk);
-            if (chartHouseReflection)
-                chartHouseReflection.intensity = HarborInteriorMaterials.ReflectionLevel(dusk);
+            RoomReflection.SetDusk(dusk);
+            InteriorDaylight.SetDaylight(daylight * (.48f + .52f * Mathf.Clamp01(sunlight)) * (1f - .28f * overcast));
             Shader.SetGlobalVector("_HarborSunDirection", dir);
             Shader.SetGlobalFloat("_HarborCloudCoverage", clouds);
 

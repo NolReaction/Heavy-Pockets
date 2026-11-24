@@ -143,7 +143,7 @@ namespace HeavyPockets
 
         // The panorama was rendered once at this point inside the finished chart house.
         // Unity imports its specular convolution as an HDR cubemap with glossy mip levels.
-        internal ReflectionProbe InstallReflection(Transform site)
+        internal void InstallReflection(Transform site)
         {
             var mount = new GameObject("Отражения штурманской").transform;
             mount.SetParent(site, false);
@@ -156,12 +156,9 @@ namespace HeavyPockets
             probe.center = new Vector3(.4f, 0f, -.45f);
             probe.blendDistance = .15f;
             probe.importance = 2;
-            probe.intensity = ReflectionLevel(Shader.GetGlobalFloat("_HarborDusk"));
+            mount.gameObject.AddComponent<RoomReflection>();
             installedProbe = probe;
-            return probe;
         }
-
-        internal static float ReflectionLevel(float dusk) => Mathf.Lerp(.85f, .30f, dusk);
 
         internal Material GetFinish(string name)
         {

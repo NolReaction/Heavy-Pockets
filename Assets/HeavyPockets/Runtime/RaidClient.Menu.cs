@@ -2,26 +2,28 @@ using UnityEngine;
 
 namespace HeavyPockets
 {
-    internal enum RaidScreen { Play, Menu, Animations, Receipt, Base, Lighting, Maps }
+    internal enum RaidScreen { Play, Menu, Animations, Receipt, Base, Lighting, Maps, Graphics }
     internal enum RaidMenuAction { Resume, Bag, Animations, Base, Join, CancelQueue, Quit, Pouch1, Pouch2, Pouch3, Pouch4,
-        HarborDaylight, HarborPoster, HarborDusk, Lighting, BackToMenu, Maps, ChangeMap }
+        HarborDaylight, HarborPoster, HarborDusk, Lighting, BackToMenu, Maps, ChangeMap, Graphics }
 
     public sealed partial class RaidClient
     {
         private byte basePouchLevel = 1;
         private bool lightingLook;
-        private bool InPauseMenu => screen == RaidScreen.Menu || screen == RaidScreen.Animations || screen == RaidScreen.Lighting || screen == RaidScreen.Maps;
+        private bool ViewingSettings => screen == RaidScreen.Lighting || screen == RaidScreen.Graphics;
+        private bool InPauseMenu => screen == RaidScreen.Menu || screen == RaidScreen.Animations || ViewingSettings || screen == RaidScreen.Maps;
 
         private void CloseMenuViews()
         {
             hud?.CloseAnimationPreview();
             hud?.CloseLightingControls();
+            if (screen == RaidScreen.Graphics) hud?.CloseGraphicsControls();
             lightingLook = false;
         }
 
         private void UpdateLightingLook()
         {
-            if (Input.GetMouseButtonDown(1)) lightingLook = !RaidHud.PointerOverLightingControls();
+            if (Input.GetMouseButtonDown(1)) lightingLook = !RaidHud.PointerOverSettings();
             if (!lightingLook) return;
             if (Input.GetMouseButton(1))
             {
@@ -44,7 +46,7 @@ namespace HeavyPockets
         {
             if (disconnected || !HasOwnPose || loadingMap) return;
             if (screen == RaidScreen.Maps) { UseMenu(RaidMenuAction.BackToMenu); return; }
-            if (screen == RaidScreen.Lighting) { UseMenu(RaidMenuAction.BackToMenu); return; }
+            if (ViewingSettings) { UseMenu(RaidMenuAction.BackToMenu); return; }
             if (screen == RaidScreen.Animations) { LeaveAnimationPreview(); return; }
             if (screen == RaidScreen.Receipt) { UseMenu(RaidMenuAction.Base); return; }
             if (screen == RaidScreen.Menu) { UseMenu(RaidMenuAction.Resume); return; }
@@ -93,8 +95,14 @@ namespace HeavyPockets
                     hud.OpenLightingControls();
                     screen = RaidScreen.Lighting;
                     break;
-                case RaidMenuAction.BackToMenu when screen == RaidScreen.Lighting:
-                    hud.CloseLightingControls();
+                case RaidMenuAction.Graphics when screen == RaidScreen.Menu:
+                    lightingLook = false;
+                    hud.OpenGraphicsControls();
+                    screen = RaidScreen.Graphics;
+                    break;
+                case RaidMenuAction.BackToMenu when ViewingSettings:
+                    if (screen == RaidScreen.Graphics) hud.CloseGraphicsControls();
+                    else hud.CloseLightingControls();
                     if (lightingLook) SendMovement(Vector2.zero);
                     lightingLook = false;
                     screen = RaidScreen.Menu;

@@ -7,7 +7,7 @@ namespace HeavyPockets
     {
         internal Action<RaidMenuAction> MenuAction;
         private static readonly RaidMenuAction[] PauseButtons = { RaidMenuAction.Resume, RaidMenuAction.Animations,
-            RaidMenuAction.Maps, RaidMenuAction.Lighting, RaidMenuAction.Bag, RaidMenuAction.Quit };
+            RaidMenuAction.Maps, RaidMenuAction.Graphics, RaidMenuAction.Lighting, RaidMenuAction.Bag, RaidMenuAction.Quit };
         private static readonly RaidMenuAction[] MapButtons = { RaidMenuAction.ChangeMap, RaidMenuAction.BackToMenu };
         private static readonly RaidMenuAction[] ReceiptButtons = { RaidMenuAction.Base };
         private static readonly RaidMenuAction[] BaseButtons = { RaidMenuAction.Join, RaidMenuAction.Maps, RaidMenuAction.Quit,
@@ -74,6 +74,7 @@ namespace HeavyPockets
                 case RaidMenuAction.Bag: return "Открыть рюкзак";
                 case RaidMenuAction.Animations: return "Анимации";
                 case RaidMenuAction.Lighting: return "Оформление порта";
+                case RaidMenuAction.Graphics: return "Графика";
                 case RaidMenuAction.Base: return "Вернуться на базу";
                 case RaidMenuAction.Join: return state.ChangingQueue ? "Входим…" : "Начать новый рейд";
                 case RaidMenuAction.CancelQueue: return state.ChangingQueue ? "Отменяем…" : "Отменить ожидание";
@@ -86,17 +87,19 @@ namespace HeavyPockets
             internal readonly float Width, Height, Rail, Margin, HeaderY, HeaderHeight, ActionY;
             private readonly bool hasPouches;
 
-            internal StationLayout(float width, float height, bool receipt, int count)
+            internal StationLayout(float width, float height, bool receipt, RaidMenuAction[] actions)
             {
                 Width = width;
                 Height = height;
                 Rail = Mathf.Round(Mathf.Clamp(width * .36f, 304f, 372f));
                 Margin = Mathf.Round(Rail * .079f);
                 HeaderY = Mathf.Round(Mathf.Clamp(height * .20f, 78f, 150f));
-                HeaderHeight = receipt ? 96f : 76f;
-                hasPouches = count == BaseButtons.Length;
-                int railRows = hasPouches ? 3 : count;
-                float footer = count == PauseButtons.Length ? 24f : 108f;
+                bool pause = actions == PauseButtons;
+                HeaderHeight = receipt ? 96f : pause ? Mathf.Clamp(height - 440f, 60f, 76f) : 76f;
+                hasPouches = actions == BaseButtons;
+                int railRows = hasPouches ? 3 : actions.Length;
+                float footer = pause ? 16f : 108f;
+                if (pause) HeaderY = Mathf.Min(HeaderY, height - footer - railRows * 44f - HeaderHeight - 38f);
                 ActionY = Mathf.Min(HeaderY + HeaderHeight + 55f, height - footer - railRows * 44f);
             }
 
@@ -161,7 +164,7 @@ namespace HeavyPockets
             bool atBase = s.Connected && !s.Disconnected && s.Screen == RaidScreen.Base;
             bool maps = s.Connected && !s.Disconnected && s.Screen == RaidScreen.Maps;
             bool paused = s.Connected && !s.Disconnected && (s.Screen == RaidScreen.Menu || maps);
-            var layout = new StationLayout(width, height, receipt, actions.Length);
+            var layout = new StationLayout(width, height, receipt, actions);
             Vector3 mouse = Input.mousePosition;
             Vector2 point = new Vector2(mouse.x, Screen.height - mouse.y) * (width / Screen.width);
             var ev = Event.current;
@@ -293,7 +296,7 @@ namespace HeavyPockets
             float scale = Mathf.Min(Screen.width / 840f, Screen.height / 500f, 2.2f);
             float width = scale > 0f ? Screen.width / scale : 840f;
             float height = scale > 0f ? Screen.height / scale : 500f;
-            var layout = new StationLayout(width, height, s.Screen == RaidScreen.Receipt && !s.Disconnected, actions.Length);
+            var layout = new StationLayout(width, height, s.Screen == RaidScreen.Receipt && !s.Disconnected, actions);
             var point = layout.Button(index).center;
             return MenuPointer(s, layout, actions, point, true) && MenuPointer(s, layout, actions, point, false);
         }

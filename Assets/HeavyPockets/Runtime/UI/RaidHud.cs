@@ -54,6 +54,8 @@ namespace HeavyPockets
                 DrawAnimationPreview(width, height);
             else if (state.Connected && !state.Disconnected && state.Screen == RaidScreen.Lighting)
                 DrawLightingControls(width, height);
+            else if (state.Connected && !state.Disconnected && state.Screen == RaidScreen.Graphics)
+                DrawGraphicsControls(width, height);
             else if (state.Disconnected || !state.Connected || state.Screen != RaidScreen.Play)
                 DrawSessionScreen(state, width, height);
             else if (state.Inventory)
