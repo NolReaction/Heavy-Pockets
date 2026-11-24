@@ -53,11 +53,13 @@ namespace HeavyPockets.Editor
 
         private static void BuildFromMenu(bool server)
         {
+#if !UNITY_EDITOR_WIN
             if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.playeveryware.eos/package.json") == null)
             {
                 Build(server, false);
                 return;
             }
+#endif
             // Local play uses a temporary project so the installed EOS Editor validator
             // remains enabled in the authoring project without requiring a deployment.
             string root = Path.GetDirectoryName(Application.dataPath);
@@ -72,7 +74,7 @@ namespace HeavyPockets.Editor
                 WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
             };
             System.Diagnostics.Process.Start(start)?.Dispose();
-            Debug.Log($"Started local {target} build. See Build/Development/{target}-build.log.");
+            Debug.Log($"Started local {target} build. See the latest {target}-build.log in Build/Development-*.");
         }
 
         // Invoked only inside the protected build script's isolated Unity project.

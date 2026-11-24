@@ -6,31 +6,35 @@ namespace HeavyPockets
 {
     internal sealed partial class RaidScenery
     {
+        private Material shorePlants;
+
         private void BuildCoast()
         {
             var earth = new Material(Resources.Load<Shader>("CoastalGround")) { name = "Harbour gravel and meadow" };
             earth.SetTexture("_Grain", Resources.Load<Texture2D>("DepotGrain"));
-            var plants = new Material(earth) { name = "Coastal vegetation and granite" };
-            plants.SetFloat("_Habitat", 1f);
+            shorePlants = new Material(earth) { name = "Coastal vegetation and granite" };
+            shorePlants.SetFloat("_Habitat", 1f);
             earth.SetTexture("_CoastColor", Resources.Load<Texture2D>("CoastRockColor"));
             earth.SetTexture("_CoastNormals", Resources.Load<Texture2D>("CoastRockNormals"));
             var sea = new Material(Resources.Load<Shader>("CoastalWater")) { name = "Tidal water" };
             surfaces.Add(earth);
-            surfaces.Add(plants);
+            surfaces.Add(shorePlants);
             surfaces.Add(sea);
 
             // The central flat is the networked walking plane. The hills start beyond its boundary.
-            const int step = 4;
-            const int columns = 191, rows = 183;
+            // Keep the 4 m shoreline samples at the quay. Spacing grows to 16 m in the distant hills.
+            var xs = CoastSamples(-340, 420, -96, 116);
+            var zs = CoastSamples(-364, 364, -80, 80);
+            int columns = xs.Count, rows = zs.Count;
             var vertices = new List<Vector3>(columns * rows);
             var colors = new List<Color32>(columns * rows);
             var indices = new List<int>((columns - 1) * (rows - 1) * 6);
             for (int row = 0; row < rows; row++)
             {
-                float z = (row - rows / 2) * step;
+                float z = zs[row];
                 for (int column = 0; column < columns; column++)
                 {
-                    float x = (column - 85) * step;
+                    float x = xs[column];
                     vertices.Add(new Vector3(x, CoastHeight(x,z) - .035f, z));
                     colors.Add(new Color(.54f + .46f * Noise(x, z, .043f), Meadow(x,z), 0));
                     if (row == 0 || column == 0) continue;
@@ -44,7 +48,19 @@ namespace HeavyPockets
                 new Vector3(69,-1.6f,-420), new Vector3(69,-1.6f,420),
                 new Vector3(430,-1.6f,420), new Vector3(430,-1.6f,-420)
             }, new List<int> { 0,1,2,0,2,3 }, null, sea, false);
-            BuildVegetation(plants);
+        }
+
+        private static List<float> CoastSamples(int start, int end, int denseFrom, int denseTo)
+        {
+            var coordinates = new List<float>();
+            for (int p = start; p < end; )
+            {
+                coordinates.Add(p);
+                int distance = Mathf.Max(denseFrom - p, p - denseTo);
+                p += distance < 8 ? 4 : distance < 100 ? 8 : 16;
+            }
+            coordinates.Add(end);
+            return coordinates;
         }
 
         private static float Noise(float x, float z, float frequency)

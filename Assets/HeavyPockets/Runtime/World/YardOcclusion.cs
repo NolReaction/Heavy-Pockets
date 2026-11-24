@@ -17,6 +17,8 @@ namespace HeavyPockets
         }
 
         private static readonly Node[] nodes;
+        private static readonly Bounds[] cameraGlass;
+        private static readonly Bounds glazingBounds;
 
         static YardOcclusion()
         {
@@ -24,6 +26,16 @@ namespace HeavyPockets
             nodes = new Node[Math.Max(0, boxes.Length * 2 - 1)];
             int next = 0;
             if (boxes.Length > 0) Build(boxes, 0, boxes.Length, ref next);
+            cameraGlass = (Bounds[])ChartHouseLayout.Glazing.Clone();
+            Bounds envelope = default;
+            for (int i = 0; i < cameraGlass.Length; i++)
+            {
+                cameraGlass[i].Expand(2f * RaidCameraBoom.Clearance);
+                if (i == 0) envelope = cameraGlass[i];
+                else envelope.Encapsulate(cameraGlass[i]);
+            }
+            envelope.Expand(.0002f);
+            glazingBounds = envelope;
         }
 
         private static int Build(Bounds[] boxes, int start, int count, ref int next)
@@ -56,6 +68,9 @@ namespace HeavyPockets
         internal static float ClipCamera(Vector3 origin, Vector3 direction, float length)
         {
             if (length > 0 && nodes.Length > 0) Trace(0, origin, direction, ref length, true);
+            if (length > 0 && cameraGlass.Length > 0 && RaidMap.Intersects(glazingBounds, origin, direction, length, out _))
+                foreach (Bounds pane in cameraGlass)
+                    if (RaidMap.Intersects(pane, origin, direction, length, out float first)) length = first;
             return length;
         }
 

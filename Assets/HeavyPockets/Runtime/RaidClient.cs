@@ -433,6 +433,7 @@ namespace HeavyPockets
         private void Update()
         {
             scenery?.TickLighting(Time.deltaTime);
+            scenery?.TickStreaming(HasOwnPose ? OwnPosition : Vector2.zero);
             if (Link == null || !HasOwnPose || disconnected)
                 return;
             UpdateViewport();

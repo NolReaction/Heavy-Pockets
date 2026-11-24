@@ -14,7 +14,9 @@ namespace HeavyPockets
         private readonly List<Mesh> shellMeshes = new List<Mesh>();
         private static readonly Dictionary<PrimitiveType, Mesh> primitiveMeshes = new Dictionary<PrimitiveType, Mesh>();
 
-        internal RaidScenery(Transform root)
+        internal RaidScenery(Transform root) : this(root, false) { }
+
+        private RaidScenery(Transform root, bool forCellBake)
         {
             this.root = root;
             architecture = new GameObject("Freight yard").transform;
@@ -35,6 +37,7 @@ namespace HeavyPockets
             font.RequestCharactersInTexture("ПРИЁМКА ГРУЗ ВЫХОД →", 64);
             signInk = new Material(Resources.Load<Shader>("DepotSign"));
             RefreshSignAtlas(font);
+            if (forCellBake) return;
             Font.textureRebuilt += RefreshSignAtlas;
 
             BuildRoom();
@@ -43,6 +46,7 @@ namespace HeavyPockets
             BuildCrate();
             BuildHarborPrint();
             BuildLighting();
+            InitializeStreaming();
         }
 
         private void RefreshSignAtlas(Font rebuilt)
@@ -53,6 +57,7 @@ namespace HeavyPockets
 
         internal void Dispose()
         {
+            DisposeStreaming();
             Font.textureRebuilt -= RefreshSignAtlas;
             Object.Destroy(signInk);
             foreach (Mesh mesh in shellMeshes)
@@ -79,7 +84,8 @@ namespace HeavyPockets
                 primitiveMeshes[type] = go.GetComponent<MeshFilter>().sharedMesh;
                 var collider = go.GetComponent<Collider>();
                 collider.enabled = false;
-                Object.Destroy(collider);
+                if (Application.isPlaying) Object.Destroy(collider);
+                else Object.DestroyImmediate(collider);
             }
             go.transform.SetParent(parent, false);
             go.transform.localPosition = pos;

@@ -812,9 +812,10 @@ namespace HeavyPockets
             Signal("connected", network.LocalClientId.ToString(CultureInfo.InvariantCulture));
             Phase("both connected");
             yield return new WaitUntil(() => Exists("A.connected") && Exists("B.connected"));
-            if (Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeSurfaces"))
+            bool chartHouse = Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeChartHouse");
+            if (chartHouse || Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeSurfaces"))
             {
-                yield return CheckFreightSurfaces();
+                yield return chartHouse ? CheckChartHouse() : CheckFreightSurfaces();
                 finished = true;
                 Signal("done");
                 Application.Quit(0);

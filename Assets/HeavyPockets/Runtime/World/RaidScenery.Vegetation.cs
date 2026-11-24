@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -71,7 +72,7 @@ namespace HeavyPockets
         private static Vector3 Compass(float radians) =>
             new Vector3(Mathf.Cos(radians), 0f, Mathf.Sin(radians));
 
-        private void BuildVegetation(Material plants)
+        private void BakeVegetation(CellBake bake)
         {
             // Three near belts frame the yard. Gaps on the seaward end keep the bay and headlands visible.
             var groves = new[]
@@ -84,35 +85,38 @@ namespace HeavyPockets
             };
             for (int i = 0; i < groves.Length; i++)
             {
-                var woods = new PlantMesh(6821 + i * 31);
+                var placement = new PlantMesh(6821 + i * 31);
                 for (int t = 0; t < 19; t++)
                 {
-                    float x = groves[i].x + woods.Range(-17f,17f);
-                    float z = groves[i].y + woods.Range(-12f,12f);
+                    float x = groves[i].x + placement.Range(-17f,17f);
+                    float z = groves[i].y + placement.Range(-12f,12f);
                     if (Mathf.Abs(x) < RaidMap.RoomX + 4f && Mathf.Abs(z) < RaidMap.RoomZ + 4f) continue;
                     float y = CoastHeight(x,z);
                     if (y < 0f) continue;
                     var foot = new Vector3(x,y-.13f,z);
-                    float height = woods.Range(5.2f,11.3f);
-                    if ((t+i)%4 == 0)
-                        BuildCoastalBirch(woods, foot, height);
-                    else
-                        BuildShorePine(woods, foot, height);
+                    float height = placement.Range(5.2f,11.3f);
+                    bool birch = (t+i)%4 == 0;
+                    var tile = bake.At(x,z);
+                    if (birch) BuildCoastalBirch(tile.Woods, foot, height);
+                    else BuildShorePine(tile.Woods, foot, height);
+                    var low = tile.Woodline;
+                    low.Stem(foot, foot + Vector3.up * height * .8f, height * .022f, Rgb(0x736650), 4);
+                    float radius = height * (birch ? .27f : .22f);
+                    low.Lobe(foot + Vector3.up * height * .62f, new Vector3(radius, height*.43f,radius),
+                        birch ? Rgb(0x445642) : Rgb(0x34493B), birch ? Rgb(0x949e64) : Rgb(0x667d59), 5);
                 }
                 for (int n = 0; n < 7; n++)
                 {
-                    float x = groves[i].x + woods.Range(-21,21), z = groves[i].y + woods.Range(-15,15);
+                    float x = groves[i].x + placement.Range(-21,21), z = groves[i].y + placement.Range(-15,15);
                     if (Mathf.Abs(x) < RaidMap.RoomX + 3f && Mathf.Abs(z) < RaidMap.RoomZ + 3f) continue;
                     float y = CoastHeight(x,z);
                     if (y < 0f) continue;
-                    float scale = woods.Range(.45f,1.8f);
-                    woods.Lobe(new Vector3(x,y-.06f,z), new Vector3(1.25f,.63f,.83f)*scale,
+                    float scale = placement.Range(.45f,1.8f);
+                    bake.At(x,z).Woods.Lobe(new Vector3(x,y-.06f,z), new Vector3(1.25f,.63f,.83f)*scale,
                         Rgb(0x515854), Rgb(0x969586), 8);
                 }
-                if (woods.Vertices.Count > 0)
-                    AddCoastMesh("Shelterbelt " + (i+1), woods.Vertices, woods.Triangles, woods.Colors, plants, true);
             }
-            BuildMeadowPlants(plants);
+            BakeMeadowPlants(bake);
         }
 
         private static void BuildShorePine(PlantMesh mesh, Vector3 foot, float height)
@@ -170,6 +174,9 @@ namespace HeavyPockets
 
         private static bool AllowsMeadow(float x, float z)
         {
+            Vector3 house = ChartHouseLayout.Origin;
+            if (Mathf.Abs(x-house.x)<6.65f && Mathf.Abs(z-house.z)<4.7f ||
+                Mathf.Abs(x-house.x-2.6f)<1.3f && z > house.z-9f && z < house.z-3f) return false;
             if (Mathf.Abs(x)<15.2f && Mathf.Abs(z+1f)<10.3f || Mathf.Abs(x-11f)<3.8f ||
                 Mathf.Abs(x-8f)<58.4f && Mathf.Abs(z-31f)<3.5f ||
                 Mathf.Abs(x-47f)<3.35f && Mathf.Abs(z-40f)<8.9f ||
@@ -183,31 +190,32 @@ namespace HeavyPockets
             return true;
         }
 
-        private void BuildMeadowPlants(Material plants)
+        private void BakeMeadowPlants(CellBake bake)
         {
             for (int sector = 0; sector < 4; sector++)
             {
-                var mesh = new PlantMesh(5412 + 11*sector);
+                var scatter = new PlantMesh(5412 + 11*sector);
                 for (int p = 0; p < 460; p++)
                 {
-                    float x = mesh.Range(0f,RaidMap.RoomX-.9f) * (sector%2==0 ? -1f : 1f);
-                    float z = mesh.Range(0f,RaidMap.RoomZ-.9f) * (sector<2 ? -1f : 1f);
-                    if (!AllowsMeadow(x,z) || Meadow(x,z)<mesh.Range(.28f,.72f)) continue;
-                    Color baseTone = Color.Lerp(Rgb(0x535f3c),Rgb(0x838348),mesh.Range(0,1));
-                    Color tips = Color.Lerp(Rgb(0x858f54),Rgb(0xc0ad76),mesh.Range(0,1));
-                    bool reeds = mesh.Random.Next(8)==0;
+                    float x = scatter.Range(0f,RaidMap.RoomX-.9f) * (sector%2==0 ? -1f : 1f);
+                    float z = scatter.Range(0f,RaidMap.RoomZ-.9f) * (sector<2 ? -1f : 1f);
+                    if (!AllowsMeadow(x,z) || Meadow(x,z)<scatter.Range(.28f,.72f)) continue;
+                    Color baseTone = Color.Lerp(Rgb(0x535f3c),Rgb(0x838348),scatter.Range(0,1));
+                    Color tips = Color.Lerp(Rgb(0x858f54),Rgb(0xc0ad76),scatter.Range(0,1));
+                    bool reeds = scatter.Random.Next(8)==0;
                     for (int tuft = 0; tuft < 5; tuft++)
                     {
-                        float tx = x+mesh.Range(-1.3f,1.3f), tz=z+mesh.Range(-.94f,.94f);
+                        float tx = x+scatter.Range(-1.3f,1.3f), tz=z+scatter.Range(-.94f,.94f);
                         if (!AllowsMeadow(tx,tz)) continue;
+                        var mesh = bake.At(tx,tz).Sedge;
                         var origin = new Vector3(tx,CoastHeight(tx,tz)-.02f,tz);
                         int count = reeds ? 8 : 6;
                         for (int blade = 0; blade < count; blade++)
                         {
-                            Vector3 outwards = Compass(mesh.Range(0,6.28f));
-                            Vector3 across = new Vector3(-outwards.z,0,outwards.x) * mesh.Range(.021f,.043f);
-                            float h = reeds ? mesh.Range(.37f,.65f) : mesh.Range(.18f,.39f);
-                            Vector3 start = origin + outwards * mesh.Range(.02f,.13f);
+                            Vector3 outwards = Compass(scatter.Range(0,6.28f));
+                            Vector3 across = new Vector3(-outwards.z,0,outwards.x) * scatter.Range(.021f,.043f);
+                            float h = reeds ? scatter.Range(.37f,.65f) : scatter.Range(.18f,.39f);
+                            Vector3 start = origin + outwards * scatter.Range(.02f,.13f);
                             Vector3 middle = start + Vector3.up*(h*.62f) + outwards*(h*.22f);
                             Vector3 end = start + Vector3.up*h + outwards*(h*.50f);
                             int a = mesh.Vertex(start - across,baseTone);
@@ -227,9 +235,8 @@ namespace HeavyPockets
                         }
                     }
                 }
-                if (mesh.Vertices.Count > 0)
-                    AddCoastMesh("Quayside sedge " + (sector+1), mesh.Vertices, mesh.Triangles, mesh.Colors, plants, false);
             }
         }
     }
 }
+#endif

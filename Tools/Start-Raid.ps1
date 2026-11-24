@@ -16,7 +16,9 @@ if ($UnityEditor) {
     if ($closed.IsCompleted) { return }
 }
 $security = New-LocalRaidSession
-$build = Get-LocalRaidBuild $root
+$buildSlot = Open-LocalRaidBuild $root
+try {
+$build = $buildSlot.Path
 $server = Join-Path $build 'Server/HeavyPocketsServer.exe'
 $client = Join-Path $build 'Client/HeavyPockets.exe'
 foreach ($file in $server,$client) {
@@ -79,4 +81,7 @@ try {
         if (!$p.HasExited) { $p.Kill(); $p.WaitForExit() }
         $p.Dispose()
     }
+}
+} finally {
+    if ($buildSlot.Lease) { $buildSlot.Lease.Dispose() }
 }

@@ -9,60 +9,68 @@ namespace HeavyPockets
         {
             Bounds pierBounds = default;
             bool hasPiers = false;
-            int container = 0;
             foreach (var solid in OutdoorLayout.Solids)
             {
-                Bounds bounds = solid.Bounds;
-                Vector3 c = bounds.center, size = bounds.size;
-                bool alongZ = size.z > size.x;
-                var site = Panel(architecture, solid.Kind.ToString(), c.x, bounds.min.y, c.z, alongZ ? 90 : 0);
-                float width = Mathf.Max(size.x, size.z), depth = Mathf.Min(size.x, size.z);
-                switch (solid.Kind)
+                if (solid.Kind != OutdoorKind.Pier && solid.Kind != OutdoorKind.SignalPost) continue;
+                BuildYardSolid(architecture, solid, 0);
+                if (solid.Kind == OutdoorKind.Pier)
                 {
-                    case OutdoorKind.Container:
-                        BuildFreightContainer(site, width, size.y, depth, container++);
-                        break;
-                    case OutdoorKind.Shed:
-                        BuildServiceShed(site, width, size.y, depth);
-                        break;
-                    case OutdoorKind.Barrier:
-                        BuildConcreteBarrier(site, width, size.y, depth);
-                        break;
-                    case OutdoorKind.FreightCrate:
-                        BuildFreightCrate(site, width, size.y, depth);
-                        break;
-                    case OutdoorKind.Pier:
-                        Part(site, "Portal crane leg", 0, size.y / 2, 0, width - .22f, size.y, depth - .22f, amber);
-                        Part(site, "Crane wheel box", 0, .56f, 0, width, 1.12f, depth, black);
-                        Part(site, "Drive cover", 0, 1.08f, 0, width, .33f, depth, teal);
-                        if (hasPiers) pierBounds.Encapsulate(bounds);
-                        else { pierBounds = bounds; hasPiers = true; }
-                        break;
-                    case OutdoorKind.LocomotiveDeck:
-                    case OutdoorKind.WagonDeck:
-                        site.localRotation = Quaternion.identity;
-                        BuildRailDeck(site, size, solid.Kind == OutdoorKind.LocomotiveDeck);
-                        break;
-                    case OutdoorKind.DieselHood:
-                        site.localRotation = Quaternion.identity;
-                        BuildDieselHood(site, size);
-                        break;
-                    case OutdoorKind.DriverCab:
-                        site.localRotation = Quaternion.identity;
-                        BuildDriverCab(site, size);
-                        break;
-                    case OutdoorKind.TimberLoad:
-                        site.localRotation = Quaternion.identity;
-                        BuildTimberLoad(site, size);
-                        break;
-                    case OutdoorKind.SignalPost:
-                        Part(site, "Customs post", 0, size.y / 2, 0, width, size.y, depth, teal);
-                        Part(site, "Reflective post sleeve", 0, .65f, 0, width + .012f, .52f, depth + .012f, amber);
-                        break;
+                    if (hasPiers) pierBounds.Encapsulate(solid.Bounds);
+                    else { pierBounds = solid.Bounds; hasPiers = true; }
                 }
             }
             if (hasPiers) BuildPortalCrane(pierBounds);
             BuildBoundary();
+        }
+
+        private void BuildYardSolid(Transform parent, OutdoorSolid solid, int container)
+        {
+            Bounds bounds = solid.Bounds;
+            Vector3 c = bounds.center, size = bounds.size;
+            bool alongZ = size.z > size.x;
+            var site = Panel(parent, solid.Kind.ToString(), c.x, bounds.min.y, c.z, alongZ ? 90 : 0);
+            float width = Mathf.Max(size.x, size.z), depth = Mathf.Min(size.x, size.z);
+            switch (solid.Kind)
+            {
+                case OutdoorKind.Container:
+                    BuildFreightContainer(site, width, size.y, depth, container);
+                    break;
+                case OutdoorKind.Shed:
+                    BuildServiceShed(site, width, size.y, depth);
+                    break;
+                case OutdoorKind.Barrier:
+                    BuildConcreteBarrier(site, width, size.y, depth);
+                    break;
+                case OutdoorKind.FreightCrate:
+                    BuildFreightCrate(site, width, size.y, depth);
+                    break;
+                case OutdoorKind.Pier:
+                    Part(site, "Portal crane leg", 0, size.y / 2, 0, width - .22f, size.y, depth - .22f, amber);
+                    Part(site, "Crane wheel box", 0, .56f, 0, width, 1.12f, depth, black);
+                    Part(site, "Drive cover", 0, 1.08f, 0, width, .33f, depth, teal);
+                    break;
+                case OutdoorKind.LocomotiveDeck:
+                case OutdoorKind.WagonDeck:
+                    site.localRotation = Quaternion.identity;
+                    BuildRailDeck(site, size, solid.Kind == OutdoorKind.LocomotiveDeck);
+                    break;
+                case OutdoorKind.DieselHood:
+                    site.localRotation = Quaternion.identity;
+                    BuildDieselHood(site, size);
+                    break;
+                case OutdoorKind.DriverCab:
+                    site.localRotation = Quaternion.identity;
+                    BuildDriverCab(site, size);
+                    break;
+                case OutdoorKind.TimberLoad:
+                    site.localRotation = Quaternion.identity;
+                    BuildTimberLoad(site, size);
+                    break;
+                case OutdoorKind.SignalPost:
+                    Part(site, "Customs post", 0, size.y / 2, 0, width, size.y, depth, teal);
+                    Part(site, "Reflective post sleeve", 0, .65f, 0, width + .012f, .52f, depth + .012f, amber);
+                    break;
+            }
         }
 
         private void BuildRailDeck(Transform site, Vector3 size, bool engine)

@@ -25,11 +25,18 @@ if (!$UnityEditor -or !(Test-Path -LiteralPath $UnityEditor -PathType Leaf)) {
 }
 if ($UsePluginConfig -and !$Protected) { throw '-UsePluginConfig applies to -Protected builds.' }
 . (Join-Path $PSScriptRoot 'EosBuild.ps1')
+. (Join-Path $PSScriptRoot 'LocalDevelopmentBuild.ps1')
+$writer = $writeSlot = $null
+try {
 $manifest = Get-Content -Raw -LiteralPath (Join-Path $root 'Packages/manifest.json') | ConvertFrom-Json
 $installed = $manifest.dependencies.'com.playeveryware.eos'
 $buildPath = Join-Path $root 'Build'
 if ($Protected) { $buildPath = Join-Path $buildPath 'Protected' }
-else { $buildPath = Join-Path $buildPath 'Development' }
+else {
+    $writer = Open-LocalRaidBuildWriter $root $StopRequested
+    $selected = Get-LocalRaidBuild $root
+    $buildPath = $selected
+}
 [void][IO.Directory]::CreateDirectory($buildPath)
 $pairStamp = Join-Path $buildPath 'two-player-build.sha256'
 if ($ForEditorPair) {
@@ -40,7 +47,7 @@ if ($ForEditorPair) {
         Get-ChildItem -LiteralPath (Join-Path $root $directory) -Recurse -File |
             Where-Object { $_.FullName.Substring($root.Length) -notmatch '^\\Assets\\(StreamingAssets\\EOS|Samples\\Epic Online Services Plugin for Unity)(\\|\.meta$|$)' }
     })
-    $files += Get-Item -LiteralPath $PSCommandPath,(Join-Path $PSScriptRoot 'EosBuild.ps1')
+    $files += Get-Item -LiteralPath $PSCommandPath,(Join-Path $PSScriptRoot 'EosBuild.ps1'),(Join-Path $PSScriptRoot 'LocalDevelopmentBuild.ps1')
     $sha = [Security.Cryptography.SHA256]::Create()
     try {
         $inputs = foreach ($file in $files | Sort-Object FullName) {
@@ -60,7 +67,12 @@ if ($ForEditorPair) {
         return
     }
 }
-if (!$Protected -and (Test-Path -LiteralPath $pairStamp)) { Remove-Item -LiteralPath $pairStamp }
+if (!$Protected) {
+    $writeSlot = Open-LocalRaidWriteSlot $root $selected
+    $buildPath = $writeSlot.Path
+    Initialize-LocalRaidWriteSlot $root $buildPath $selected $Target
+    $pairStamp = Join-Path $buildPath 'two-player-build.sha256'
+}
 $project = $root
 $package = $null
 if ($Protected) {
@@ -77,7 +89,7 @@ if ($Protected) {
     $package = Get-EosPackage $EosPackageRoot ($Target -ne 'Server')
 }
 $stage = $null
-if ($installed -or $Protected -or $ForEditorPair) {
+if ($installed -or $Protected -or $ForEditorPair -or (Test-Path -LiteralPath (Join-Path $root 'Temp/UnityLockfile'))) {
     $tempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
     $stageName = 'HeavyPockets-Unity-' + [guid]::NewGuid().ToString('N')
     $stage = Join-Path $tempBase $stageName
@@ -119,6 +131,10 @@ try {
         Write-Output "$name build ready. Log: $log"
     }
     if ($ForEditorPair) { [IO.File]::WriteAllText($pairStamp, $fingerprint) }
+    if (!$Protected) {
+        $writeSlot.Lease.Dispose()
+        Publish-LocalRaidBuild $root $buildPath
+    }
 } finally {
     if ($stage -and (Test-Path -LiteralPath $stage)) {
         $actual = (Resolve-Path -LiteralPath $stage).Path
@@ -127,4 +143,8 @@ try {
         }
         Remove-Item -LiteralPath $actual -Recurse -Force
     }
+}
+} finally {
+    if ($writeSlot) { $writeSlot.Lease.Dispose() }
+    if ($writer) { $writer.Dispose() }
 }

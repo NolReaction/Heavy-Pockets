@@ -11,7 +11,8 @@ try {
     }
     $root = Split-Path -Parent $PSScriptRoot
     . (Join-Path $PSScriptRoot 'LocalRaidSession.ps1')
-    $exe = Join-Path (Get-LocalRaidBuild $root) 'Server/HeavyPocketsServer.exe'
+    $buildSlot = Open-LocalRaidBuild $root
+    $exe = Join-Path $buildSlot.Path 'Server/HeavyPocketsServer.exe'
     if (!(Test-Path -LiteralPath $exe -PathType Leaf)) {
         $failure = 'Missing local server. Build the Windows dedicated server from the Heavy Pockets menu.'
         throw $failure
@@ -56,4 +57,5 @@ try {
             if (!$server.HasExited) { $server.Kill(); [void]$server.WaitForExit(3000) }
         } finally { $server.Dispose() }
     }
+    if ($buildSlot.Lease) { $buildSlot.Lease.Dispose() }
 }

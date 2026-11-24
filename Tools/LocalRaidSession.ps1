@@ -1,8 +1,4 @@
-function Get-LocalRaidBuild([string]$root) {
-    $build = Join-Path $root 'Build/Development'
-    if (Test-Path -LiteralPath $build -PathType Container) { return $build }
-    return (Join-Path $root 'Build')
-}
+. (Join-Path $PSScriptRoot 'LocalDevelopmentBuild.ps1')
 
 # Ephemeral local issuer. No certificate-store installation, network service or persistent key.
 function New-LocalRaidSession {

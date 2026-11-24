@@ -39,7 +39,8 @@ namespace HeavyPockets
 
         private static Bounds[] BuildCollisionBoxes()
         {
-            var boxes = new Bounds[6 + OutdoorLayout.Occluders.Length];
+            var glazing = ChartHouseLayout.Glazing;
+            var boxes = new Bounds[6 + OutdoorLayout.Occluders.Length + glazing.Length];
             boxes[0] = Partition;
             boxes[1] = Capping;
             boxes[2] = WearStrip;
@@ -47,6 +48,8 @@ namespace HeavyPockets
             boxes[4] = Placard;
             boxes[5] = CargoCase;
             Array.Copy(OutdoorLayout.Occluders, 0, boxes, 6, OutdoorLayout.Occluders.Length);
+            // Transparent windows stop the body and physics props but transmit sight.
+            Array.Copy(glazing, 0, boxes, 6 + OutdoorLayout.Occluders.Length, glazing.Length);
             return boxes;
         }
 

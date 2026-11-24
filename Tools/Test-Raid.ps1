@@ -5,14 +5,20 @@ param(
     [switch]$HeadlessClients,
     [switch]$ShowClients,
     [switch]$CaptureMotion,
-    [switch]$SurfacesOnly
+    [switch]$SurfacesOnly,
+    [switch]$ChartHouseOnly
 )
 
 $ErrorActionPreference = 'Stop'
+if ($ChartHouseOnly -and ($HeadlessClients -or $SurfacesOnly)) {
+    throw 'The chart house check needs two graphical clients and its own route.'
+}
 . (Join-Path $PSScriptRoot 'LocalRaidSession.ps1')
 $security = New-LocalRaidSession
 $project = Split-Path -Parent $PSScriptRoot
-$build = Get-LocalRaidBuild $project
+$buildSlot = Open-LocalRaidBuild $project
+try {
+$build = $buildSlot.Path
 $serverExe = Join-Path $build 'Server/HeavyPocketsServer.exe'
 $clientExe = Join-Path $build 'Client/HeavyPockets.exe'
 foreach ($file in $serverExe, $clientExe) {
@@ -60,6 +66,7 @@ try {
     if ($ShowClients -and !$HeadlessClients) { $options += '-probeCapture' }
     if ($CaptureMotion -and $ShowClients -and !$HeadlessClients) { $options += '-probeMotion' }
     if ($SurfacesOnly) { $options += '-probeSurfaces' }
+    if ($ChartHouseOnly) { $options += '-probeChartHouse' }
     if ($HeadlessClients) { $options += @('-batchmode','-nographics') }
     $a = Start-Player 'A' $clientExe ($options + @('-probeRole','A'))
     Wait-For 'first client connection' { Test-Path -LiteralPath (Join-Path $run 'A.connected') } 60
@@ -68,7 +75,7 @@ try {
         server = $server.Id; A = $a.Id; B = $b.Id; headlessClients = $HeadlessClients.IsPresent
         captureFrames = ($ShowClients.IsPresent -and !$HeadlessClients.IsPresent)
     } | ConvertTo-Json))
-    if (!$SurfacesOnly) {
+    if (!$SurfacesOnly -and !$ChartHouseOnly) {
         Wait-For 'blocked open before loot generation' { Test-Path -LiteralPath (Join-Path $run 'A.wall-denied') } 45
         $generated = 'HEAVY POCKETS CRATE GENERATED after authorized open'
         if (Select-String -Quiet -LiteralPath $serverLog -SimpleMatch $generated) {
@@ -81,6 +88,13 @@ try {
     } 205
     foreach ($client in $a,$b) {
         if (-not $client.WaitForExit(15000) -or $client.ExitCode -ne 0) { throw "Client did not exit cleanly: $($client.Id)" }
+    }
+    if ($ChartHouseOnly) {
+        foreach ($mark in 'A.house-entered','B.house-unloaded','A.house-retained','B.house-returned') {
+            if (!(Test-Path -LiteralPath (Join-Path $run $mark))) { throw "Missing $mark" }
+        }
+        Write-Host 'Both players entered the chart house. The distant client unloaded the interior, then reloaded it on return while the other client stayed inside.'
+        return
     }
     if ($SurfacesOnly) {
         foreach ($role in 'A','B') {
@@ -101,4 +115,7 @@ try {
         } finally { $p.Dispose() }
     }
     Write-Host "Logs and wire traces: $run"
+}
+} finally {
+    if ($buildSlot.Lease) { $buildSlot.Lease.Dispose() }
 }

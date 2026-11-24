@@ -72,11 +72,12 @@ namespace HeavyPockets
 
         private static Bounds[] BuildOccluders()
         {
-            var boxes = new Bounds[Solids.Length + 2];
+            var boxes = new Bounds[Solids.Length + 2 + ChartHouseLayout.Collision.Length];
             for (int i = 0; i < Solids.Length; i++)
                 boxes[i] = Solids[i].Bounds;
             boxes[Solids.Length] = ExitSign;
             boxes[Solids.Length + 1] = ExitCrossbar;
+            System.Array.Copy(ChartHouseLayout.Collision, 0, boxes, Solids.Length + 2, ChartHouseLayout.Collision.Length);
             return boxes;
         }
     }

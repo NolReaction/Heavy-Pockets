@@ -1,0 +1,15 @@
+Poly Haven scans used on the chart house
+
+Red Brick — Rob Tuytel
+https://polyhaven.com/a/red_brick
+
+Painted Plaster Wall, Terrazzo Tiles — Amal Kumar
+https://polyhaven.com/a/painted_plaster_wall
+https://polyhaven.com/a/terrazzo_tiles
+
+Wood Table 001 — Dimitrios Savva and Rico Cilliers
+https://polyhaven.com/a/wood_table_001
+
+CC0 1.0 Universal — https://polyhaven.com/license
+The color maps are graded for this interior. The detail maps combine
+OpenGL tangent-space normal X/Y, ambient occlusion and smoothness.
