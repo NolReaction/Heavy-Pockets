@@ -26,6 +26,10 @@ Shader "Hidden/Heavy Pockets/Ambient Occlusion"
 
         float3 ViewPosition(float2 uv)
         {
+            // Depth is point-sampled. Reconstruct the very same texel's ray, otherwise
+            // a sloping plane acquires a false height at every fractional sample.
+            float2 pixel = _AOSampling.xy;
+            uv = clamp((floor(uv / pixel) + 0.5) * pixel, 0.5 * pixel, 1.0 - 0.5 * pixel);
             float z = EyeDepth(uv);
             float scale = lerp(z, 1.0, _AOProjection.z);
             return float3((2.0 * uv - 1.0) * _AOProjection.xy * scale, z);
@@ -33,7 +37,10 @@ Shader "Hidden/Heavy Pockets/Ambient Occlusion"
 
         half4 Estimate(v2f_img input) : SV_Target
         {
-            float2 uv = input.uv;
+            // Choose one full-resolution texel centre inside each 2x2 block; the
+            // mathematical centre of an even-sized block lies on four depth texels.
+            float2 halfPixel = floor(input.uv * _AOHalfResolution.xy);
+            float2 uv = min((2.0 * halfPixel + 1.5) * _AOSampling.xy, 1.0 - 0.5 * _AOSampling.xy);
             float3 p = ViewPosition(uv);
             if (p.z > 48.0 || p.z >= _AOProjection.w * 0.999)
                 return half4(0, p.z, 0, 1);
@@ -52,26 +59,28 @@ Shader "Hidden/Heavy Pockets/Ambient Occlusion"
             float radius = _AOSampling.z;
             float2 uvRadius = 0.5 * radius / (_AOProjection.xy * lerp(p.z, 1.0, _AOProjection.z));
             float bias = max(radius * 0.01, p.z * 0.00005);
-            // Four fixed rotations distribute the taps without a moving noise pattern.
-            float2 cell = fmod(floor(uv * _AOHalfResolution.xy), 2.0);
-            float angle = (cell.x + 2.0 * cell.y) * 1.57079633;
-            float2 direction;
-            sincos(angle, direction.y, direction.x);
+            // Use the same symmetric rings at every pixel. Rotating a sparse kernel
+            // on a repeating pixel grid imprints that grid across walls and ceilings.
+            float2 direction = float2(0.92387953, 0.38268343);
             float occlusion = 0;
             [unroll]
-            for (int i = 0; i < 12; ++i)
+            for (int axis = 0; axis < 8; ++axis)
             {
-                float2 sampleUV = saturate(uv + direction * uvRadius * ((i + 0.65) / 12.0));
-                float3 delta = ViewPosition(sampleUV) - p;
-                float d2 = max(dot(delta, delta), 1e-8);
-                float angular = saturate((dot(n, delta) - bias) * rsqrt(d2) - 0.06);
-                occlusion += angular * saturate(1.0 - d2 / (radius * radius));
-                // Golden angle between consecutive samples.
-                direction = float2(-0.737369 * direction.x - 0.675490 * direction.y,
-                                    0.675490 * direction.x - 0.737369 * direction.y);
+                float2 outer = float2(0.92387953 * direction.x - 0.38268343 * direction.y,
+                                      0.38268343 * direction.x + 0.92387953 * direction.y);
+                [unroll]
+                for (int ring = 0; ring < 2; ++ring)
+                {
+                    float2 offset = ring == 0 ? direction * 0.28 : outer * 0.68;
+                    float3 delta = ViewPosition(uv + offset * uvRadius) - p;
+                    float d2 = max(dot(delta, delta), 1e-8);
+                    float angular = saturate((dot(n, delta) - bias) * rsqrt(d2) - 0.06);
+                    occlusion += angular * saturate(1.0 - d2 / (radius * radius));
+                }
+                direction = 0.70710678 * float2(direction.x - direction.y, direction.x + direction.y);
             }
             float fade = 1.0 - smoothstep(30.0, 48.0, p.z);
-            return half4(occlusion * (2.1 / 12.0) * fade, p.z, 0, 1);
+            return half4(occlusion * (2.1 / 16.0) * fade, p.z, 0, 1);
         }
 
         float2 BilateralTap(float2 uv, float weight, float depth, float tolerance)
@@ -90,17 +99,29 @@ Shader "Hidden/Heavy Pockets/Ambient Occlusion"
                 if (_MainTex_TexelSize.y < 0) uv.y = 1.0 - uv.y;
             #endif
             float depth = EyeDepth(uv);
+            // A depth gradient within one surface is expected on oblique ceilings.
+            // Limit the relaxation at depth discontinuities to preserve silhouettes.
+            float slope = min(fwidth(depth) * 1.5, _AOSampling.z * 0.28);
             if (depth > 48.0 || depth >= _AOProjection.w * 0.999) return color;
 
-            float2 at = uv * _AOHalfResolution.xy - 0.5;
-            float2 f = frac(at);
+            // Quadratic reconstruction folds denoising into the upsample. Its weights
+            // stay continuous as the camera moves between low-resolution texels.
+            float2 at = 0.5 * (uv / _AOSampling.xy - 0.5);
+            float2 cell = floor(at);
+            float2 d = at - (cell + 0.5);
+            float3 wx = float3(0.5 * (0.5 - d.x) * (0.5 - d.x), 0.75 - d.x*d.x,
+                               0.5 * (0.5 + d.x) * (0.5 + d.x));
+            float3 wy = float3(0.5 * (0.5 - d.y) * (0.5 - d.y), 0.75 - d.y*d.y,
+                               0.5 * (0.5 + d.y) * (0.5 + d.y));
             float2 stepUV = _AOHalfResolution.zw;
-            float2 corner = (floor(at) + 0.5) * stepUV;
-            float tolerance = max(depth * 0.002, _AOSampling.z * 0.06);
-            float2 sum = BilateralTap(corner, (1.0 - f.x) * (1.0 - f.y), depth, tolerance);
-            sum += BilateralTap(corner + float2(stepUV.x, 0), f.x * (1.0 - f.y), depth, tolerance);
-            sum += BilateralTap(corner + float2(0, stepUV.y), (1.0 - f.x) * f.y, depth, tolerance);
-            sum += BilateralTap(corner + stepUV, f.x * f.y, depth, tolerance);
+            float2 center = (cell + 0.5) * stepUV;
+            float tolerance = max(depth * 0.002 + slope, _AOSampling.z * 0.06);
+            float2 sum = 0;
+            [unroll] for (int y = 0; y < 3; ++y)
+            {
+                [unroll] for (int x = 0; x < 3; ++x)
+                    sum += BilateralTap(center + float2(x-1,y-1) * stepUV, wx[x] * wy[y], depth, tolerance);
+            }
             color.rgb *= 1.0 - min(0.7, _AOSampling.w * (sum.x / max(sum.y, 0.01)));
             return color;
         }

@@ -12,6 +12,14 @@ namespace HeavyPockets
         private readonly Camera camera;
         private readonly PlayableGraph graph;
         private readonly AnimationPlayableOutput output;
+        private readonly Animator starter;
+        private ResourceRequest testLoad;
+        private StudioTestCharacter testActor;
+        private Animator testAnimator;
+        private bool referencePose;
+        internal bool TestSelected { get; private set; }
+        internal bool Ready => clip != null;
+        internal bool Loading => TestSelected && testLoad != null && !testLoad.isDone;
         private AnimationClipPlayable playback;
         private AnimationClip clip;
         private float time;
@@ -33,12 +41,12 @@ namespace HeavyPockets
             GameObject actor = StarterRunner.Instantiate(turntable);
             foreach (Transform child in actor.GetComponentsInChildren<Transform>(true))
                 child.gameObject.layer = Layer;
-            var animator = actor.GetComponentInChildren<Animator>(true);
-            animator.runtimeAnimatorController = null;
-            animator.applyRootMotion = false;
-            graph = PlayableGraph.Create("Starter Assets animation preview");
+            starter = actor.GetComponentInChildren<Animator>(true);
+            starter.runtimeAnimatorController = null;
+            starter.applyRootMotion = false;
+            graph = PlayableGraph.Create("Animation studio preview");
             graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
-            output = AnimationPlayableOutput.Create(graph, "Preview", animator);
+            output = AnimationPlayableOutput.Create(graph, "Preview", starter);
             graph.Play();
             turntable.localRotation = Quaternion.Euler(0, -16f, 0);
             camera = Child("Portrait camera").gameObject.AddComponent<Camera>();
@@ -99,8 +107,47 @@ namespace HeavyPockets
 
         internal void Select(StarterMotion motion)
         {
+            TestSelected = false;
+            if (testActor) testActor.gameObject.SetActive(false);
+            starter.gameObject.SetActive(true);
+            BindClip(starter, StarterRunner.Clip(motion));
+        }
+
+        internal void SelectTest(bool showReference)
+        {
+            TestSelected = true;
+            referencePose = showReference;
+            starter.gameObject.SetActive(false);
+            if (testActor)
+            {
+                testActor.gameObject.SetActive(true);
+                BindClip(testAnimator, referencePose ? testActor.ReferencePose : testActor.Motion);
+                return;
+            }
             if (playback.IsValid()) graph.DestroyPlayable(playback);
-            clip = StarterRunner.Clip(motion);
+            clip = null;
+            Playing = false;
+            testLoad ??= Resources.LoadAsync<GameObject>(StudioTestCharacter.ResourcePath);
+        }
+
+        private void FinishTestLoad()
+        {
+            var prefab = testLoad.asset as GameObject;
+            testLoad = null;
+            if (!prefab) { Debug.LogError("Animation studio could not load its test character."); return; }
+            var instance = Object.Instantiate(prefab, turntable, false);
+            foreach (Transform child in instance.GetComponentsInChildren<Transform>(true))
+                child.gameObject.layer = Layer;
+            testActor = instance.GetComponent<StudioTestCharacter>();
+            testAnimator = instance.GetComponentInChildren<Animator>();
+            BindClip(testAnimator, referencePose ? testActor.ReferencePose : testActor.Motion);
+        }
+
+        private void BindClip(Animator actor, AnimationClip selected)
+        {
+            if (playback.IsValid()) graph.DestroyPlayable(playback);
+            output.SetTarget(actor);
+            clip = selected;
             playback = AnimationClipPlayable.Create(graph, clip);
             playback.SetApplyFootIK(false);
             output.SetSourcePlayable(playback);
@@ -110,19 +157,22 @@ namespace HeavyPockets
 
         internal void Advance(float frameDelta)
         {
+            if (TestSelected && testLoad != null && testLoad.isDone) FinishTestLoad();
             if (Playing) ApplyTime(Mathf.Repeat(time + frameDelta, clip.length));
         }
 
-        internal void TogglePlayback() => Playing = !Playing;
+        internal void TogglePlayback() { if (Ready) Playing = !Playing; }
 
         internal void Step(int frames)
         {
+            if (!Ready) return;
             Playing = false;
             ApplyTime(Mathf.Clamp(Frame + frames, 0, FrameCount - 1) / clip.frameRate);
         }
 
         internal void Seek(float fraction)
         {
+            if (!Ready) return;
             Playing = false;
             ApplyTime(Mathf.Clamp01(fraction) * clip.length);
         }

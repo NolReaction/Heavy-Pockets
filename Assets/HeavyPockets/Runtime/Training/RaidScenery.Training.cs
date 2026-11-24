@@ -8,14 +8,16 @@ namespace HeavyPockets
     {
         internal CoastalSurfaceField TrainingSurfaces { get; private set; }
 
-        private void BuildTrainingRange()
+        private System.Collections.IEnumerator BuildTrainingRange()
         {
             var approaches = TrainingApproach.Layout(WorldPlan.Load(true));
             TrainingSurfaces = CoastalSurfaceField.Create(root, Vector2.zero,
                 new Vector2(RaidMap.RoomX * 2f, RaidMap.RoomZ * 2f), (p, margin) =>
                     TrainingLayout.IsPaved(p,margin) || TrainingApproach.Covers(approaches,p,margin),
                 ReceivingWarehouseLayout.Foundation(TrainingBuildings.Warehouse)).GetComponent<CoastalSurfaceField>();
+            yield return null;
             TrainingGrove.Plant(TrainingSurfaces);
+            yield return null;
             var mint = Surface("Seafoam enamel", Rgb(0x71B3A4));
             var brick = Surface("Terracotta rubber", Rgb(0xB96947), SurfaceFinish.Rubber);
             var sand = Surface("Pale limestone", Rgb(0xE2CC9F), SurfaceFinish.Concrete);
@@ -63,7 +65,9 @@ namespace HeavyPockets
             }
             landings.Finish(Panel(root,"Parkour landings",0,0,0,0),shellMeshes);
             BuildPracticePromenade(approaches);
+            yield return null;
             BuildRangeHorizon();
+            yield return null;
             BuildExtraction();
             foreach (var post in TrainingGround.ExitPosts)
                 BuildYardSolid(architecture, post, 0);

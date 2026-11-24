@@ -45,6 +45,7 @@ namespace HeavyPockets
             portCells.Add(new PortCell {
                 Key = PortCellAsset.Key(origin.x, origin.z), ResourcePath = "PortBuildings/" + resource,
                 Proxy = proxy.gameObject, House = chartHouse, Offset = origin,
+                Visibility = BuildingVisibility,
                 Extents = chartHouse ? new Vector2(6f,4f) : new Vector2(7f,4.5f)
             });
         }

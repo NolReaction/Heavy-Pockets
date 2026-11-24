@@ -5,7 +5,7 @@ namespace HeavyPockets
     [DisallowMultipleComponent, RequireComponent(typeof(Camera))]
     internal sealed class RaidAmbientOcclusion : MonoBehaviour
     {
-        internal const float DefaultIntensity = 0.8f;
+        internal const float DefaultIntensity = 0.2f;
         internal const float DefaultRadius = 0.34f;
         internal const float MinRadius = 0.1f, MaxRadius = 1.2f, MaxIntensity = 2f;
 

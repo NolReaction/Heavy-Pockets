@@ -8,6 +8,9 @@ namespace HeavyPockets
     {
         // Distance to the nearest point of the 24 m square, not to its centre.
         private const float EnterDistance = 32f, LeaveDistance = 44f;
+        // A two-storey facade and its windows are visible from across the training field.
+        private const float BuildingVisibility = 3.5f;
+        private const int MaxPendingCells = 3;
         private sealed class PortCell
         {
             internal Vector2Int Key;
@@ -24,7 +27,6 @@ namespace HeavyPockets
 
         private readonly List<PortCell> portCells = new List<PortCell>();
         private readonly Dictionary<string, Material> cellMaterials = new Dictionary<string, Material>();
-        private PortCell loadingCell;
         private sealed class TileRequest
         {
             private static readonly Dictionary<string, TileRequest> active = new Dictionary<string, TileRequest>();
@@ -79,6 +81,39 @@ namespace HeavyPockets
         internal static bool ReleasedAllCells => TileRequest.Idle;
         internal int LoadedCellCount { get; private set; }
 
+        internal static System.Collections.IEnumerator PreloadMapAssets(bool training)
+        {
+            // These are the large dependencies used by the spawn view on both maps.
+            // Resources.Load in the builders then reuses Unity's loaded objects.
+            var requests = new List<ResourceRequest> {
+                Resources.LoadAsync<GameObject>(StarterRunner.ModelPath),
+                Resources.LoadAsync<RuntimeAnimatorController>(StarterRunner.ControllerPath),
+                Resources.LoadAsync<GameObject>("CargoChest"), Resources.LoadAsync<GameObject>("DispatchDesk"),
+                Resources.LoadAsync<Material>("SurfaceGarden/Coastal surface"),
+                Resources.LoadAsync<Texture2D>("DepotGrain"), Resources.LoadAsync<Texture2D>("HarborScreenprint"),
+                Resources.LoadAsync<Texture2D>("HarborCloudField")
+            };
+            if (training)
+            {
+                requests.Add(Resources.LoadAsync<Texture2D>("TrainingDirectory"));
+                requests.Add(Resources.LoadAsync<Texture2D>("SurfaceGarden/Coastal Branches"));
+                requests.Add(Resources.LoadAsync<Material>("SurfaceGarden/Meadow blades"));
+                requests.Add(Resources.LoadAsync<Material>(FloorMaterials + "Quayside setts"));
+                requests.Add(Resources.LoadAsync<Material>(FloorMaterials + "Basalt cobbles"));
+                foreach (var sample in TrainingLayout.FloorSamples)
+                    requests.Add(Resources.LoadAsync<Material>(FloorMaterials + sample.Material));
+            }
+            else
+            {
+                requests.Add(Resources.LoadAsync<PortCellAsset>("PortHorizon"));
+                requests.Add(Resources.LoadAsync<Texture2D>("ShoreConifers"));
+                requests.Add(Resources.LoadAsync<Texture2D>("QuaysidePlants"));
+                requests.Add(Resources.LoadAsync<Texture2D>("QuaysideBark"));
+            }
+            foreach (var request in requests)
+                if (!request.isDone) yield return request;
+        }
+
         private void RegisterPlanCells(WorldPlan plan)
         {
             if (!plan) return;
@@ -90,7 +125,7 @@ namespace HeavyPockets
                     Planned = true, ResourcePath = item.Piece.Tile, Offset = item.Position, Rotation = item.Rotation,
                     Extents = new Vector2(box.extents.x, box.extents.z),
                     CenterShift = new Vector2(box.center.x - item.Position.x, box.center.z - item.Position.z),
-                    Visibility = Mathf.Clamp(Mathf.Max(box.size.x, box.size.y, box.size.z) / 8f, 1f, 3f)
+                    Visibility = Mathf.Clamp(Mathf.Max(box.size.x, box.size.y, box.size.z) / 5f, 1f, 4f)
                 });
             }
         }
@@ -102,18 +137,22 @@ namespace HeavyPockets
             if (catalog == null || catalog.HorizonCells == null)
                 throw new System.InvalidOperationException("The baked PortHorizon catalog is missing.");
             Vector2Int houseKey = PortCellAsset.Key(ChartHouseLayout.Origin.x, ChartHouseLayout.Origin.z);
+            var warehouse = ReceivingWarehouseLayout.Origin;
+            Vector2Int warehouseKey = PortCellAsset.Key(warehouse.x, warehouse.z);
+            var workshop = OutdoorLayout.QuayWorkshop.Bounds.center;
+            Vector2Int workshopKey = PortCellAsset.Key(workshop.x, workshop.z);
             foreach (PortCellAsset distant in catalog.HorizonCells)
             {
                 var cell = new PortCell { Key = distant.Cell, House = distant.Cell == houseKey,
+                    Visibility = distant.Cell == houseKey || distant.Cell == warehouseKey || distant.Cell == workshopKey
+                        ? BuildingVisibility : 1f,
                     ResourcePath = PortCellAsset.TileName(distant.Cell) };
-                cell.Proxy = InstantiateCell(distant, "Port silhouette");
+                InstantiateCell(distant, "Port silhouette", out cell.Proxy);
                 if (cell.House) BuildChartHouseProxy(cell.Proxy.transform,ChartHouseLayout.Origin);
-                var warehouse = ReceivingWarehouseLayout.Origin;
-                if (distant.Cell == PortCellAsset.Key(warehouse.x, warehouse.z))
+                if (distant.Cell == warehouseKey)
                     MountDistantWarehouseLeaves(cell.Proxy.transform, Vector3.zero);
                 portCells.Add(cell);
             }
-            TickStreaming(Vector2.zero);
         }
 
         private void MountDistantWarehouseLeaves(Transform parent, Vector3 parentOrigin)
@@ -137,9 +176,9 @@ namespace HeavyPockets
             gate.Bind(shutter);
         }
 
-        private GameObject InstantiateCell(PortCellAsset asset, string label, Vector3 offset = default, bool planned = false)
+        private void InstantiateCell(PortCellAsset asset, string label, out GameObject tile, Vector3 offset = default, bool planned = false)
         {
-            var tile = new GameObject($"{label} [{asset.Cell.x},{asset.Cell.y}]");
+            tile = new GameObject($"{label} [{asset.Cell.x},{asset.Cell.y}]");
             tile.transform.SetParent(root, false);
             tile.transform.localPosition = offset;
             foreach (var surface in asset.Surfaces)
@@ -180,7 +219,6 @@ namespace HeavyPockets
                     var gate = instance.Find(ReceivingWarehouseLayout.GateLeafName);
                     if (gate != null) WorldMechanisms.PlacedWarehouseGate.Bind(gate);
                 }
-            return tile;
         }
 
         private static float DistanceSquared(Vector2 point, PortCell cell)
@@ -194,7 +232,7 @@ namespace HeavyPockets
             var key = cell.Key;
             float x = Mathf.Max(0f, Mathf.Max(key.x * PortCellAsset.Width - point.x, point.x - (key.x + 1) * PortCellAsset.Width));
             float z = Mathf.Max(0f, Mathf.Max(key.y * PortCellAsset.Width - point.y, point.y - (key.y + 1) * PortCellAsset.Width));
-            return x*x + z*z;
+            return (x*x + z*z) / (cell.Visibility * cell.Visibility);
         }
 
         internal void TickStreaming(Vector2 playerXZ)
@@ -202,96 +240,96 @@ namespace HeavyPockets
             if (StreamingSettled && (playerXZ - lastStreamingPoint).sqrMagnitude < 1f) return;
             lastStreamingPoint = playerXZ;
             StreamingSettled = false;
-            if (loadingCell != null && DistanceSquared(playerXZ, loadingCell) > LeaveDistance * LeaveDistance)
-                CancelTileLoad();
-            if (loadingCell != null && loadingCell.Near.Request.isDone &&
-                (!loadingCell.House || HarborInteriorMaterials.Ready))
+            PortCell ready = null, next = null;
+            float nextDistance = EnterDistance * EnterDistance, readyDistance = float.PositiveInfinity;
+            int pending = 0;
+            foreach (var cell in portCells)
             {
-                var cell = loadingCell;
-                var asset = cell.Near.Request.asset as PortCellAsset;
-                if (asset == null)
+                if (cell.Failed) continue;
+                float distance = DistanceSquared(playerXZ, cell);
+                if (cell.Near == null)
                 {
-                    CancelTileLoad();
-                    cell.Failed = true;
-                    Debug.LogError($"Missing detailed harbor tile {cell.ResourcePath}.");
+                    if (distance <= nextDistance) { next = cell; nextDistance = distance; }
+                    continue;
                 }
-                else
+                if (distance > LeaveDistance * LeaveDistance)
                 {
-                    loadingCell = null;
-                    cell.Detail = InstantiateCell(asset, "Port cell", cell.Offset, cell.Planned);
-                    if (cell.Planned) cell.Detail.transform.localRotation = cell.Rotation;
-                    if (cell.House)
+                    if (cell.Detail)
                     {
-                        try { BuildChartHouse(cell.Detail.transform, asset.ChartHouseShell, asset.ChartHouseDetail,
-                            cell.Extents == Vector2.zero ? ChartHouseLayout.Origin : Vector3.zero); }
-                        catch (System.Exception ex)
-                        {
-                            // Keep the distant hull and allow the remaining map to stream.
-                            cell.Detail.SetActive(false);
-                            Object.Destroy(cell.Detail);
-                            cell.Detail = null;
-                            cell.Near.Release();
-                            cell.Near = null;
-                            cell.Failed = true;
-                            Debug.LogException(ex);
-                            return;
-                        }
-                        finally { HarborInteriorMaterials.CancelPrefetch(); }
+                        if (cell.Proxy) cell.Proxy.SetActive(true);
+                        cell.Detail.SetActive(false);
+                        Object.Destroy(cell.Detail);
+                        cell.Detail = null;
+                        LoadedCellCount--;
                     }
-                    if (cell.Proxy) cell.Proxy.SetActive(false);
-                    LoadedCellCount++;
-                    return; // Budget one activation or unload per frame.
+                    else if (cell.House) HarborInteriorMaterials.CancelPrefetch();
+                    cell.Near.Release();
+                    cell.Near = null;
+                    return;
+                }
+                if (cell.Detail) continue;
+                pending++;
+                if (distance < readyDistance && cell.Near.Request.isDone && (!cell.House || HarborInteriorMaterials.Ready))
+                {
+                    ready = cell;
+                    readyDistance = distance;
                 }
             }
 
-            PortCell next = null;
-            float nearest = EnterDistance * EnterDistance;
-            foreach (var cell in portCells)
+            // Overlap disk reads, while budgeting a single activation (or unload) per frame.
+            if (next != null && pending < MaxPendingCells)
             {
-                float distance = DistanceSquared(playerXZ, cell);
-                if (cell.Detail != null && distance > LeaveDistance * LeaveDistance)
+                if (next.House) HarborInteriorMaterials.Prefetch();
+                next.Near = TileRequest.Acquire(next.ResourcePath);
+            }
+            if (ready != null) ActivateCell(ready);
+            else StreamingSettled = pending == 0 && next == null;
+        }
+
+        private void ActivateCell(PortCell cell)
+        {
+            try
+            {
+                if (!(cell.Near.Request.asset is PortCellAsset asset))
+                    throw new System.InvalidOperationException($"Missing detailed harbor tile {cell.ResourcePath}.");
+                InstantiateCell(asset, "Port cell", out cell.Detail, cell.Offset, cell.Planned);
+                if (cell.Planned) cell.Detail.transform.localRotation = cell.Rotation;
+                if (cell.House)
+                    BuildChartHouse(cell.Detail.transform, asset.ChartHouseShell, asset.ChartHouseDetail,
+                        cell.Extents == Vector2.zero ? ChartHouseLayout.Origin : Vector3.zero);
+                if (cell.Proxy) cell.Proxy.SetActive(false);
+                LoadedCellCount++;
+            }
+            catch (System.Exception ex)
+            {
+                if (cell.Detail)
                 {
-                    if (cell.Proxy) cell.Proxy.SetActive(true);
                     cell.Detail.SetActive(false);
                     Object.Destroy(cell.Detail);
                     cell.Detail = null;
-                    cell.Near.Release();
-                    cell.Near = null;
-                    LoadedCellCount--;
-                    return;
                 }
-                if (cell.Detail == null && !cell.Failed && distance <= nearest)
-                {
-                    nearest = distance;
-                    next = cell;
-                }
+                cell.Near.Release();
+                cell.Near = null;
+                cell.Failed = true;
+                Debug.LogException(ex);
             }
-            if (loadingCell != null) return;
-            if (next == null) { StreamingSettled = true; return; }
-            loadingCell = next;
-            if (next.House) HarborInteriorMaterials.Prefetch();
-            next.Near = TileRequest.Acquire(next.ResourcePath);
-        }
-
-        private void CancelTileLoad()
-        {
-            if (loadingCell.House) HarborInteriorMaterials.CancelPrefetch();
-            loadingCell.Near.Release();
-            loadingCell.Near = null;
-            loadingCell = null;
+            finally
+            {
+                if (cell.House) HarborInteriorMaterials.CancelPrefetch();
+            }
         }
 
         private void DisposeStreaming()
         {
-            if (loadingCell != null) CancelTileLoad();
             foreach (var cell in portCells)
             {
-                if (cell.Detail != null)
+                if (cell.Detail)
                 {
                     cell.Detail.SetActive(false);
                     Object.Destroy(cell.Detail);
-                    cell.Near.Release();
                 }
+                else if (cell.Near != null && cell.House) HarborInteriorMaterials.CancelPrefetch();
+                cell.Near?.Release();
                 Object.Destroy(cell.Proxy);
             }
             portCells.Clear();

@@ -149,7 +149,7 @@ namespace HeavyPockets
         private void DrawMapLoading(float width, float height)
         {
             if (Event.current.type != EventType.Repaint) return;
-            Block(0, 0, width, height, StationInk);
+            Block(0, 0, width, height, new Color32(21, 38, 43, 255));
             float x = width * .5f - 159f, y = height * .48f;
             Text(x, y - 52, 318, 24, "ЗАГРУЗКА КАРТЫ", 13, Mint, true);
             Text(x, y - 27, 318, 46, MapName(TrainingGround.Active), 31, Paper, true);

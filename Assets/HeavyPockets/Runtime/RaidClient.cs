@@ -139,7 +139,8 @@ namespace HeavyPockets
         private readonly Dictionary<ulong, Runner> runners = new Dictionary<ulong, Runner>();
         private RaidScenery scenery;
         private GameObject worldStage;
-        private bool renderedTraining, waitingForWorld, loadingMap, votedForMap;
+        private bool renderedTraining, awaitingInitialMap, waitingForWorld, loadingMap, votedForMap;
+        private int readyFrame;
         private byte mapVotes, mapPlayers;
         private readonly Queue<RaidEvent> pendingWorldEvents = new Queue<RaidEvent>();
         private Camera view;
@@ -206,7 +207,6 @@ namespace HeavyPockets
             renderedTraining = TrainingGround.Active;
             if ((Application.isBatchMode && !TrainingGround.Active) || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
                 return;
-            BuildMapView();
             var eye = new GameObject("Runner camera");
             eye.transform.SetParent(transform, false);
             view = eye.AddComponent<Camera>();
@@ -220,13 +220,15 @@ namespace HeavyPockets
             view.cullingMask &= ~(1 << AnimationStudio.Layer);
             eye.AddComponent<AudioListener>();
             eye.transform.position = new Vector3(0, 1.58f, -1f);
+            // A late join can be assigned a map different from the scene used to start the client.
+            awaitingInitialMap = waitingForWorld = loadingMap = true;
         }
 
-        private void BuildMapView()
+        private void BeginMapLoad()
         {
-            worldStage = new GameObject(renderedTraining ? "Training ground" : "Freight harbor");
-            worldStage.transform.SetParent(transform, false);
-            scenery = new RaidScenery(worldStage.transform);
+            loadingMap = waitingForWorld = true;
+            readyFrame = -1;
+            StartCoroutine(LoadMapView());
         }
 
         private void ChangeMap(bool training)
@@ -234,13 +236,12 @@ namespace HeavyPockets
             renderedTraining = training;
             PortCollisionWorld.Select(training, transform);
             if (view == null) return;
-            loadingMap = waitingForWorld = true;
             ReleaseCursor();
             worldStage.SetActive(false);
             scenery.Dispose();
             Destroy(worldStage);
             scenery = null;
-            StartCoroutine(LoadMapView());
+            BeginMapLoad();
         }
 
         private System.Collections.IEnumerator LoadMapView()
@@ -248,9 +249,13 @@ namespace HeavyPockets
             // Paint the loading screen; release old renderers before creating the next map.
             yield return null;
             yield return null;
-            while (!RaidScenery.ReleasedAllCells) yield return null;
+            yield return RaidScenery.PreloadMapAssets(renderedTraining);
+            while (!RaidScenery.ReleasedAllCells && !disconnected) yield return null;
             if (disconnected) yield break;
-            BuildMapView();
+            worldStage = new GameObject(renderedTraining ? "Training ground" : "Freight harbor");
+            worldStage.transform.SetParent(transform, false);
+            scenery = new RaidScenery(worldStage.transform);
+            yield return scenery.BuildWorld();
             waitingForWorld = false;
             while (!waitingForWorld && pendingWorldEvents.Count > 0) Receive(pendingWorldEvents.Dequeue());
         }
@@ -300,6 +305,13 @@ namespace HeavyPockets
             if (waitingForWorld)
             {
                 pendingWorldEvents.Enqueue(e);
+                if (awaitingInitialMap && e.Kind == RaidEventKind.RaidStarted)
+                {
+                    awaitingInitialMap = false;
+                    renderedTraining = e.TrainingMap;
+                    PortCollisionWorld.Select(renderedTraining, transform);
+                    BeginMapLoad();
+                }
                 return;
             }
             switch (e.Kind)
@@ -347,9 +359,9 @@ namespace HeavyPockets
                             ownModel = scenery.InstantiatePlayer(e.Actor, new Vector3(e.Position.x, e.Motion.Height, e.Position.y), yaw);
                             ownGait = ownModel.GetComponent<FreightRunnerGait>();
                             UpdateCamera(true);
-                            if (captureOnSpawn && !ScriptedInput && Application.isFocused) CaptureCursor();
+                            if (captureOnSpawn && !loadingMap && !ScriptedInput && Application.isFocused) CaptureCursor();
                         }
-                        captureOnSpawn = false;
+                        if (!loadingMap) captureOnSpawn = false;
                         HasOwnPose = true;
                     }
                     else if (scenery != null && !extracted && !disconnected)
@@ -507,14 +519,19 @@ namespace HeavyPockets
 
         private void Update()
         {
+            if (waitingForWorld) return;
             scenery?.TickLighting(Time.deltaTime);
             scenery?.TickContainerLids();
-            scenery?.TickStreaming(HasOwnPose ? OwnPosition : Vector2.zero);
+            scenery?.TickStreaming(HasOwnPose ? OwnPosition : RaidMap.Spawn(0));
             if (loadingMap)
             {
-                if (waitingForWorld || !HasOwnPose || scenery == null || !scenery.StreamingSettled) return;
+                if (!HasOwnPose || scenery == null || !scenery.StreamingSettled) return;
+                // Render the complete spawn view once behind the overlay to upload visible geometry and materials.
+                if (readyFrame < 0) { readyFrame = Time.frameCount; return; }
+                if (Time.frameCount == readyFrame) return;
                 loadingMap = false;
-                if (!ScriptedInput && Application.isFocused && screen == RaidScreen.Play) CaptureCursor();
+                if (captureOnSpawn && !ScriptedInput && Application.isFocused && screen == RaidScreen.Play) CaptureCursor();
+                captureOnSpawn = false;
             }
             if (Link == null || !HasOwnPose || disconnected)
                 return;

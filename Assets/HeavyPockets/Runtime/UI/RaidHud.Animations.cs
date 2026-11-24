@@ -10,7 +10,8 @@ namespace HeavyPockets
         private AnimationStudio studio;
         private Action leavePreview;
         private int previewRow, previewPress = -1;
-        private bool turningPreview;
+        private bool turningPreview, testPreview;
+        private int PreviewClipCount => testPreview ? 2 : PreviewMotions.Length;
         internal StarterMotion PreviewMotion => PreviewMotions[previewRow];
 
         internal void OpenAnimationPreview(bool graphics, Action leave)
@@ -18,6 +19,7 @@ namespace HeavyPockets
             CloseAnimationPreview();
             leavePreview = leave;
             previewRow = 0;
+            testPreview = false;
             if (graphics)
             {
                 studio = new AnimationStudio();
@@ -39,7 +41,7 @@ namespace HeavyPockets
         internal void AnimationPreviewKey(int rowStep, int stepFrame, bool toggle)
         {
             if (leavePreview == null) return;
-            if (rowStep != 0) SelectPreview((previewRow + rowStep + PreviewMotions.Length) % PreviewMotions.Length);
+            if (rowStep != 0) SelectPreview((previewRow + rowStep + PreviewClipCount) % PreviewClipCount);
             if (stepFrame != 0) studio?.Step(stepFrame);
             if (toggle) studio?.TogglePlayback();
         }
@@ -47,7 +49,16 @@ namespace HeavyPockets
         private void SelectPreview(int row)
         {
             previewRow = row;
-            studio?.Select(PreviewMotion);
+            if (testPreview) studio?.SelectTest(row == 1);
+            else studio?.Select(PreviewMotion);
+        }
+
+        private void SelectPreviewModel(bool test)
+        {
+            if (testPreview == test) return;
+            testPreview = test;
+            turningPreview = false;
+            SelectPreview(0);
         }
 
         private void DrawAnimationPreview(float width, float height)
@@ -55,9 +66,9 @@ namespace HeavyPockets
             var ev = Event.current;
             bool paint = ev.type == EventType.Repaint;
             float rail = Mathf.Clamp(width * .375f, 300f, 390f);
-            const float margin = 25f, top = 112f;
+            const float margin = 25f, top = 130f;
             float content = rail - 2 * margin;
-            float rowHeight = Mathf.Min(44f, (height - top - 64f) / PreviewMotions.Length);
+            float rowHeight = Mathf.Min(44f, (height - top - 64f) / PreviewClipCount);
             Rect stage = new Rect(rail, 0, width - rail, height);
             if (paint)
             {
@@ -68,13 +79,25 @@ namespace HeavyPockets
                 PocketMark(margin, 18, Amber);
                 Text(margin + 28, 12, content - 28, 30, "Heavy Pockets", 16, Paper, true);
                 Text(margin, 49, content, 35, "Анимации", 29, Paper, true);
-                Text(margin, 84, content, 18, "Unity Starter Assets", 12, Muted);
             }
 
-            for (int i = 0; i < PreviewMotions.Length; i++)
+            if (Application.isFocused && ev.type == EventType.KeyDown && ev.keyCode == KeyCode.Tab)
+            {
+                SelectPreviewModel(!testPreview);
+                ev.Use();
+                return;
+            }
+            float tabWidth = (content - 5f) * .5f;
+            if (PreviewButton(new Rect(margin, 88, tabWidth, 30f), 110, "Unity Starter", !testPreview))
+            { SelectPreviewModel(false); return; }
+            if (PreviewButton(new Rect(margin + tabWidth + 5f, 88, tabWidth, 30f), 111, "Testchar", testPreview))
+            { SelectPreviewModel(true); return; }
+
+            for (int i = 0; i < PreviewClipCount; i++)
             {
                 var row = new Rect(margin, top + i * rowHeight, content, rowHeight - 4f);
-                if (PreviewButton(row, i, StarterRunner.Label(PreviewMotions[i]), i == previewRow))
+                string label = testPreview ? (i == 0 ? "Движение из FBX" : "Т-поза") : StarterRunner.Label(PreviewMotions[i]);
+                if (PreviewButton(row, i, label, i == previewRow))
                 {
                     SelectPreview(i);
                     return;
@@ -86,7 +109,7 @@ namespace HeavyPockets
                 return;
             }
 
-            if (studio != null && DrawPreviewControls(stage)) return;
+            if (studio != null && studio.Ready && DrawPreviewControls(stage)) return;
             if (!Application.isFocused) { turningPreview = false; previewPress = -1; return; }
             if (ev.type == EventType.MouseDown && ev.button == 0 && ev.mousePosition.y < height - 76f && stage.Contains(ev.mousePosition))
             {
@@ -110,6 +133,12 @@ namespace HeavyPockets
             if (studio == null) return;
             GUI.color = Color.white;
             GUI.DrawTexture(stage, studio.Backdrop, ScaleMode.StretchToFill);
+            if (!studio.Ready)
+            {
+                Text(stage.x, stage.center.y - 20f, stage.width, 40f,
+                    studio.Loading ? "Загрузка модели…" : "Не удалось загрузить модель", 17, Paper, false, TextAnchor.MiddleCenter);
+                return;
+            }
             float imageHeight = Mathf.Min(stage.height - 90f, stage.width * 1.2f);
             float imageWidth = imageHeight * (5f / 6f);
             var portrait = new Rect(stage.center.x - imageWidth * .5f, (stage.height - imageHeight - 74f) * .5f, imageWidth, imageHeight);

@@ -7,9 +7,9 @@ namespace HeavyPockets
 
     internal static class StarterRunner
     {
-        private const string ModelPath = "UnityStarter/Models/Armature";
+        internal const string ModelPath = "UnityStarter/Models/Armature";
         private const string Animations = "UnityStarter/Animations/";
-        private const string ControllerPath = Animations + "StarterAssetsThirdPerson";
+        internal const string ControllerPath = Animations + "StarterAssetsThirdPerson";
         // Measured on the skinned source mesh in its neutral pose, in metres.
         private const float SourceStature = 1.76186f, SourceSole = .008026f;
         private static readonly AnimationClip[] previewClips = new AnimationClip[8];

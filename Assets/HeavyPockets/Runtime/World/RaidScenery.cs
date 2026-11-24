@@ -39,22 +39,28 @@ namespace HeavyPockets
             RefreshSignAtlas(font);
             if (forCellBake) return;
             Font.textureRebuilt += RefreshSignAtlas;
+        }
+
+        internal System.Collections.IEnumerator BuildWorld()
+        {
             RegisterPlanCells(WorldPlan.Load(TrainingGround.Active));
 
             if (TrainingGround.Active)
             {
-                BuildTrainingRange();
-                BuildCrate();
-                BuildLighting();
-                return;
+                yield return BuildTrainingRange();
             }
-            BuildRoom();
-            BakeArchitecture();
-            BuildCoast();
+            else
+            {
+                BuildRoom();
+                BakeArchitecture();
+                yield return null;
+                BuildCoast();
+                yield return null;
+                BuildHarborPrint();
+            }
             BuildCrate();
-            BuildHarborPrint();
             BuildLighting();
-            InitializeStreaming();
+            if (!TrainingGround.Active) InitializeStreaming();
         }
 
         private void RefreshSignAtlas(Font rebuilt)
