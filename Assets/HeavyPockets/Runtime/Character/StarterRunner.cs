@@ -10,6 +10,8 @@ namespace HeavyPockets
         private const string ModelPath = "UnityStarter/Models/Armature";
         private const string Animations = "UnityStarter/Animations/";
         private const string ControllerPath = Animations + "StarterAssetsThirdPerson";
+        // Measured on the skinned source mesh in its neutral pose, in metres.
+        private const float SourceStature = 1.76186f, SourceSole = .008026f;
         private static readonly AnimationClip[] previewClips = new AnimationClip[8];
 
         internal static GameObject Instantiate(Transform parent)
@@ -21,6 +23,9 @@ namespace HeavyPockets
 
             var instance = UnityEngine.Object.Instantiate(model, parent, false);
             instance.name = "Unity Starter Assets Armature";
+            float scale = RaidMap.StandingHeight / SourceStature;
+            instance.transform.localScale *= scale;
+            instance.transform.localPosition -= Vector3.up * (SourceSole * scale);
             var animator = instance.GetComponentInChildren<Animator>(true);
             animator.runtimeAnimatorController = controller;
             animator.applyRootMotion = false;

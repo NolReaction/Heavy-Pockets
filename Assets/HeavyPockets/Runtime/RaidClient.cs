@@ -180,6 +180,7 @@ namespace HeavyPockets
         public bool ScriptedInput { get; set; }
         public bool HasOwnPose { get; private set; }
         public Vector2 OwnPosition { get; private set; }
+        internal byte ScaleKilograms { get; private set; }
         public float OwnYaw { get; private set; }
 
         public void Initialize(NetworkManager manager, string auditPath)
@@ -266,6 +267,12 @@ namespace HeavyPockets
                 case RaidEventKind.RaidStarted:
                     StartRound(e.Round);
                     break;
+                case RaidEventKind.WarehouseDoor:
+                    WarehouseDoor.SetOpen(e.DoorOpen);
+                    break;
+                case RaidEventKind.ScaleLoad:
+                    ScaleKilograms = e.ScaleKilograms;
+                    break;
                 case RaidEventKind.RaidQueue:
                     if (e.Round == round && extracted) { queued = e.Queued; changingQueue = false; }
                     break;
@@ -345,6 +352,7 @@ namespace HeavyPockets
                     CloseMenuViews();
                     gearMoves.Reset();
                     extracted = true;
+                    ScaleKilograms = 0;
                     screen = RaidScreen.Receipt;
                     bagFromMenu = queued = changingQueue = false;
                     extractedItems = e.Items;
@@ -385,6 +393,7 @@ namespace HeavyPockets
         {
             CloseMenuViews();
             disconnected = true;
+            ScaleKilograms = 0;
             ClearGear();
             HideInventory(false);
             ClearOtherRunners();
@@ -400,6 +409,7 @@ namespace HeavyPockets
             screen = RaidScreen.Play;
             bagFromMenu = closeRequested = queued = changingQueue = extracted = false;
             HasOwnPose = false;
+            ScaleKilograms = 0;
             OwnMotion = default;
             displayHeight = displayCrouch = 0f;
             jumpPending = false;
@@ -436,6 +446,7 @@ namespace HeavyPockets
             scenery?.TickStreaming(HasOwnPose ? OwnPosition : Vector2.zero);
             if (Link == null || !HasOwnPose || disconnected)
                 return;
+            WeighPlatform();
             UpdateViewport();
             shoulderPhase = RaidCameraBoom.AdvanceShoulder(shoulderPhase, CameraMode, Time.unscaledDeltaTime);
             if (!extracted && (ScriptedInput || InPauseMenu) &&
@@ -483,6 +494,13 @@ namespace HeavyPockets
                 runner.Gait.SetLocomotion(pose.Motion.Crouch, pose.Motion.Sprinting,
                     pose.Motion.Airborne, pose.Motion.VerticalSpeed, pose.Motion.Sliding);
             }
+        }
+
+        private void WeighPlatform()
+        {
+            var scale = scenery?.FloorScale;
+            if (!scale || !scale.isActiveAndEnabled) return;
+            scale.WeighLoad(ScaleKilograms, Time.deltaTime);
         }
 
         private Vector3 EyePosition() => RaidCameraBoom.Eye(displayPosition) +
@@ -533,6 +551,7 @@ namespace HeavyPockets
                 displayHeight - displayCrouch * RaidLocomotion.CrouchEyeDrop);
             view.transform.SetPositionAndRotation(camera, look);
             ownModel.position = new Vector3(displayPosition.x, displayHeight, displayPosition.y);
+            scenery.BendGroundcover(ownModel.position);
             ownGait.SetLookHeading(ScriptedInput ? pose.Yaw : yaw, snap);
             ownGait.SetLocomotion(displayCrouch, pose.Motion.Sprinting, pose.Motion.Airborne,
                 pose.Motion.VerticalSpeed, pose.Motion.Sliding);
@@ -637,7 +656,7 @@ namespace HeavyPockets
                     if (Cursor.lockState == CursorLockMode.Locked)
                     {
                         ReadMouseLook();
-                        if (Input.GetKeyDown(KeyCode.E)) Link.Open();
+                        if (Input.GetKeyDown(KeyCode.E)) Interact();
                     }
                 }
             }
@@ -662,6 +681,13 @@ namespace HeavyPockets
                 SendMovement(direction, buttons);
                 jumpPending = false;
             }
+        }
+
+        internal void Interact()
+        {
+            if (!HasOwnPose || extracted || disconnected || screen != RaidScreen.Play) return;
+            if (WarehouseDoor.CanOperate(OwnPosition, OwnMotion)) Link.SetWarehouseDoor(!WarehouseDoor.IsOpen);
+            else Link.Open();
         }
 
         private void ReadMouseLook()

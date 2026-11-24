@@ -6,12 +6,16 @@ param(
     [switch]$ShowClients,
     [switch]$CaptureMotion,
     [switch]$SurfacesOnly,
-    [switch]$ChartHouseOnly
+    [switch]$ChartHouseOnly,
+    [switch]$WarehouseOnly
 )
 
 $ErrorActionPreference = 'Stop'
 if ($ChartHouseOnly -and ($HeadlessClients -or $SurfacesOnly)) {
     throw 'The chart house check needs two graphical clients and its own route.'
+}
+if ($WarehouseOnly -and ($HeadlessClients -or $SurfacesOnly -or $ChartHouseOnly)) {
+    throw 'The warehouse check needs two graphical clients and its own route.'
 }
 . (Join-Path $PSScriptRoot 'LocalRaidSession.ps1')
 $security = New-LocalRaidSession
@@ -67,6 +71,7 @@ try {
     if ($CaptureMotion -and $ShowClients -and !$HeadlessClients) { $options += '-probeMotion' }
     if ($SurfacesOnly) { $options += '-probeSurfaces' }
     if ($ChartHouseOnly) { $options += '-probeChartHouse' }
+    if ($WarehouseOnly) { $options += '-probeWarehouse' }
     if ($HeadlessClients) { $options += @('-batchmode','-nographics') }
     $a = Start-Player 'A' $clientExe ($options + @('-probeRole','A'))
     Wait-For 'first client connection' { Test-Path -LiteralPath (Join-Path $run 'A.connected') } 60
@@ -75,7 +80,7 @@ try {
         server = $server.Id; A = $a.Id; B = $b.Id; headlessClients = $HeadlessClients.IsPresent
         captureFrames = ($ShowClients.IsPresent -and !$HeadlessClients.IsPresent)
     } | ConvertTo-Json))
-    if (!$SurfacesOnly -and !$ChartHouseOnly) {
+    if (!$SurfacesOnly -and !$ChartHouseOnly -and !$WarehouseOnly) {
         Wait-For 'blocked open before loot generation' { Test-Path -LiteralPath (Join-Path $run 'A.wall-denied') } 45
         $generated = 'HEAVY POCKETS CRATE GENERATED after authorized open'
         if (Select-String -Quiet -LiteralPath $serverLog -SimpleMatch $generated) {
@@ -88,6 +93,13 @@ try {
     } 205
     foreach ($client in $a,$b) {
         if (-not $client.WaitForExit(15000) -or $client.ExitCode -ne 0) { throw "Client did not exit cleanly: $($client.Id)" }
+    }
+    if ($WarehouseOnly) {
+        foreach ($mark in 'B.saw-opening','B.swing-blocked','A.weighed','B.closed-outside','A.opened-inside','B.both-through','A.double-load','B.double-load','A.single-load') {
+            if (!(Test-Path -LiteralPath (Join-Path $run $mark))) { throw "Missing $mark" }
+        }
+        Write-Host 'Both players used the receiving door. The door respected occupied space, and the floor scale registered and released the load.'
+        return
     }
     if ($ChartHouseOnly) {
         foreach ($mark in 'A.house-entered','B.house-unloaded','A.house-retained','B.house-returned') {

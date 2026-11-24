@@ -41,6 +41,7 @@ namespace HeavyPockets
             public bool Entered, Queued;
             public bool AtBase;
             public byte PouchLevel = 1;
+            public byte ReportedScaleLoad;
             public readonly HashSet<ulong> VisibleActors = new HashSet<ulong>();
             public float IngressCredits = 64f;
             public float MoveCredits = 12f;
@@ -64,6 +65,7 @@ namespace HeavyPockets
             this.net = net;
             this.mayPlay = mayPlay;
             this.pairedSpawn = pairedSpawn;
+            WarehouseDoor.SetOpen(false);
             audit = RaidAudit.Open(auditPath);
             net.CustomMessagingManager.RegisterNamedMessageHandler(RaidWire.Commands, OnCommand);
             net.OnClientConnectedCallback += ActivatePlayer;
@@ -122,6 +124,7 @@ namespace HeavyPockets
             players[id] = player;
             loot.IssueKit(id, player.PouchLevel);
             Send(id, new RaidEvent { Kind = RaidEventKind.RaidStarted, Round = round });
+            Send(id, new RaidEvent { Kind = RaidEventKind.WarehouseDoor, DoorOpen = WarehouseDoor.IsOpen });
             Send(id, Pose(player));
             SendGear(player);
             SendInventory(player, RaidEventKind.Bag);
@@ -148,6 +151,7 @@ namespace HeavyPockets
             // Every result has already been sent. Retire the shared ledger once,
             // even if nobody has pressed the next-raid button yet.
             loot = new RaidLoot();
+            WarehouseDoor.SetOpen(false);
             nextSlot = 0;
             round = round == uint.MaxValue ? 1 : round + 1;
             var ready = new List<Player>(players.Count);
@@ -241,6 +245,15 @@ namespace HeavyPockets
                 GearCommand(player, command, bytes);
                 return;
             }
+            if (command == RaidCommand.SetWarehouseDoor)
+            {
+                if (!player.Exited && bytes.Length == 2 && bytes[1] <= 1 && player.ActionCredits >= 1f)
+                {
+                    player.ActionCredits -= 1f;
+                    SetWarehouseDoor(player, bytes[1] != 0);
+                }
+                return;
+            }
             bool transfer = command == RaidCommand.Take || command == RaidCommand.Store;
             int expected = command == RaidCommand.Place ? 14 : transfer ? 9 : 1;
             if (bytes.Length != expected || bytes[0] < (byte)RaidCommand.Open ||
@@ -329,6 +342,19 @@ namespace HeavyPockets
             player.InputLeft = InputLifetime;
         }
 
+        private void SetWarehouseDoor(Player operatorPlayer, bool open)
+        {
+            if (open == WarehouseDoor.IsOpen || !WarehouseDoor.CanOperate(operatorPlayer.Position, operatorPlayer.Motion))
+                return;
+            foreach (var player in players.Values)
+                if (!player.Exited && WarehouseDoor.SweepsPlayer(player.Position, player.Motion)) return;
+
+            WarehouseDoor.SetOpen(open);
+            var state = new RaidEvent { Kind = RaidEventKind.WarehouseDoor, DoorOpen = open };
+            foreach (var player in players.Values)
+                if (!player.Exited) Send(player.Id, state);
+        }
+
         private static void UpdateCamera(Player player, float delta)
         {
             // The reported camera must have reached a sightline, and the same sightline
@@ -388,6 +414,7 @@ namespace HeavyPockets
             if (snapshot)
                 untilSnapshot = SnapshotInterval;
             bool hadExtraction = false;
+            int scaleLoad = 0;
             foreach (Player player in players.Values)
             {
                 player.IngressCredits = Mathf.Min(64f, player.IngressCredits + deltaSeconds * 60f);
@@ -417,8 +444,11 @@ namespace HeavyPockets
                     SendInventory(player, RaidEventKind.Crate);
                 UpdateExit(player, deltaSeconds, snapshot);
                 hadExtraction |= player.Exited;
+                if (!player.Exited && WarehouseFloorScale.Supports(player.Position, player.Motion))
+                    scaleLoad += WarehouseFloorScale.RunnerMass;
             }
             if (hadExtraction) AdvanceRoundIfEmpty();
+            ReportScaleLoad((byte)Mathf.Min(scaleLoad, WarehouseFloorScale.Capacity));
             foreach (Player actor in players.Values)
             {
                 if (actor.Exited)
@@ -446,6 +476,18 @@ namespace HeavyPockets
                     if (send)
                         RaidWire.Send(net, recipient.Id, RaidWire.Events, pose ??= RaidWire.Encode(Pose(actor)), audit);
                 }
+            }
+        }
+
+        private void ReportScaleLoad(byte load)
+        {
+            foreach (Player player in players.Values)
+            {
+                if (player.Exited || (load == 0 && player.ReportedScaleLoad == 0)) continue;
+                byte reading = load != 0 && WarehouseFloorScale.CanRead(player.Position, player.Motion) ? load : (byte)0;
+                if (reading == player.ReportedScaleLoad) continue;
+                player.ReportedScaleLoad = reading;
+                Send(player.Id, new RaidEvent { Kind = RaidEventKind.ScaleLoad, ScaleKilograms = reading });
             }
         }
 

@@ -300,10 +300,10 @@ namespace HeavyPockets
         private void BuildServiceShed(Transform site, float width, float height, float depth)
         {
             // The streamed masonry shell wraps this plinth and meets the fascia.
-            Part(site, "Cast concrete sill", 0, .095f, 0, width, .19f, depth, concrete);
+            bool receiving = width > 10f;
+            if (!receiving) Part(site, "Cast concrete sill", 0, .095f, 0, width, .19f, depth, concrete);
             Part(site, "Roof fascia", 0, height - .20f, 0, width, .36f, depth, teal);
             Part(site, "Roof cap", 0, height - .04f, 0, width, .08f, depth, chalk);
-            bool receiving = width > 10f;
             float signX = receiving ? 0f : -width / 6f;
             float signY = receiving ? height - .94f : height - .55f;
             float faceZ = -depth * .5f + .035f;

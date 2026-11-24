@@ -73,13 +73,15 @@ namespace HeavyPockets
 
         private static Bounds[] BuildOccluders()
         {
-            var boxes = new Bounds[Solids.Length + 2 + ChartHouseLayout.Collision.Length];
-            for (int i = 0; i < Solids.Length; i++)
-                boxes[i] = Solids[i].Bounds;
-            boxes[Solids.Length] = ExitSign;
-            boxes[Solids.Length + 1] = ExitCrossbar;
-            System.Array.Copy(ChartHouseLayout.Collision, 0, boxes, Solids.Length + 2, ChartHouseLayout.Collision.Length);
-            return boxes;
+            var boxes = new System.Collections.Generic.List<Bounds>();
+            foreach (var solid in Solids)
+                if (!solid.Bounds.Equals(ReceivingWarehouse.Bounds)) boxes.Add(solid.Bounds);
+            boxes.Add(ExitSign);
+            boxes.Add(ExitCrossbar);
+            boxes.AddRange(ChartHouseLayout.Collision);
+            boxes.AddRange(ReceivingWarehouseLayout.Collision);
+            boxes.AddRange(YardPlanting.Trunks);
+            return boxes.ToArray();
         }
     }
 }

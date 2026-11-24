@@ -67,6 +67,12 @@ namespace HeavyPockets
                     DrawExit(mid, height - 122f, state.Seconds);
                 else if (RaidMap.CanOpen(state.Position, state.Motion))
                     Hint(mid, height - 106f, "Обыскать ящик", Amber);
+                else if (WarehouseDoor.CanOperate(state.Position, state.Motion))
+                {
+                    string action = WarehouseDoor.IsOpen ? "Закрыть дверь" : "Открыть дверь";
+                    Hint(mid, height - 106f, WarehouseDoor.SweepsPlayer(state.Position, state.Motion)
+                        ? "Отойдите от створки" : action, Amber);
+                }
             }
             GUI.matrix = oldMatrix;
             GUI.color = oldColor;

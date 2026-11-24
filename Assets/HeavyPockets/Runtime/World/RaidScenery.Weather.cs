@@ -129,14 +129,13 @@ namespace HeavyPockets
         internal void TickLighting(float deltaTime)
         {
             float wind = settings[currentStyle][HarborLightParameter.Wind];
-            if (wind > 0f && deltaTime > 0f)
-            {
+            if (deltaTime > 0f)
                 windTravel += wind * (double)deltaTime;
-                // Both noise layers repeat over this distance on each axis.
-                const double period = 22600.0;
-                Shader.SetGlobalVector(WindOffset, new Vector4((float)(windTravel * .86 % period),
-                    (float)(windTravel * .51 % period), 0f, 0f));
-            }
+            // XY is the repeating cloud offset. Z and W give vegetation the wind strength and gust phase.
+            const double period = 22600.0;
+            Shader.SetGlobalVector(WindOffset, new Vector4((float)(windTravel * .86 % period),
+                (float)(windTravel * .51 % period), Mathf.Sqrt(wind / 15f),
+                (float)(windTravel * .31 % (2.0 * System.Math.PI))));
             if (refreshSkyAt > 0f && Time.unscaledTime >= refreshSkyAt)
             {
                 refreshSkyAt = 0f;

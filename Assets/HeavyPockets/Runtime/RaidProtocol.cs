@@ -7,9 +7,9 @@ using UnityEngine;
 
 namespace HeavyPockets
 {
-    public enum RaidEventKind : byte { Pose = 1, Left, Crate, Bag, Result, Status, ExitProgress, RaidStarted, RaidQueue, Gear, PouchLevel }
+    public enum RaidEventKind : byte { Pose = 1, Left, Crate, Bag, Result, Status, ExitProgress, RaidStarted, RaidQueue, Gear, PouchLevel, WarehouseDoor, ScaleLoad }
     public enum RaidStatus : byte { Opened = 1, Blocked, Closed, Taken, Empty, Denied, OutOfRange, AlreadyExited, CrateLost, Stored, BagFull, Placed, NoSpace, Stale }
-    internal enum RaidCommand : byte { Move = 1, Open, Close, Take, Store, Place, NextRaid, EnterRaid, MoveGear, SelectGear, SetPouchLevel, EnterBase }
+    internal enum RaidCommand : byte { Move = 1, Open, Close, Take, Store, Place, NextRaid, EnterRaid, MoveGear, SelectGear, SetPouchLevel, EnterBase, SetWarehouseDoor }
 
     public struct RaidEvent
     {
@@ -28,6 +28,8 @@ namespace HeavyPockets
         public uint Operation;
         public uint Round;
         public bool Queued;
+        public bool DoorOpen;
+        public byte ScaleKilograms;
         public byte PouchLevel;
     }
 
@@ -35,8 +37,8 @@ namespace HeavyPockets
     // the fields for its own kind. Public poses cannot serialize any inventory fields.
     internal static class RaidWire
     {
-        public const string Commands = "heavypockets.command.v11";
-        public const string Events = "heavypockets.event.v11";
+        public const string Commands = "heavypockets.command.v12";
+        public const string Events = "heavypockets.event.v12";
         private const int ResultCapacity = LootCatalog.BagCapacity + GearCatalog.Slots - 1;
         private const int MaxPayload = 3 + ResultCapacity * 8;
 
@@ -97,6 +99,12 @@ namespace HeavyPockets
                 case RaidEventKind.Left:
                     bytes = new byte[9];
                     PutActor(bytes, message.Actor);
+                    break;
+                case RaidEventKind.WarehouseDoor:
+                    bytes = new byte[] { 0, (byte)(message.DoorOpen ? 1 : 0) };
+                    break;
+                case RaidEventKind.ScaleLoad:
+                    bytes = new byte[] { 0, message.ScaleKilograms };
                     break;
                 case RaidEventKind.Crate:
                 case RaidEventKind.Bag:
@@ -198,6 +206,13 @@ namespace HeavyPockets
                 case RaidEventKind.Left when bytes.Length == 9:
                     message.Actor = BitConverter.ToUInt64(bytes, 1);
                     return true;
+                case RaidEventKind.WarehouseDoor when bytes.Length == 2 && bytes[1] <= 1:
+                    message.DoorOpen = bytes[1] != 0;
+                    return true;
+                case RaidEventKind.ScaleLoad when bytes.Length == 2:
+                    message.ScaleKilograms = bytes[1];
+                    return bytes[1] == 0 || bytes[1] == WarehouseFloorScale.RunnerMass ||
+                        bytes[1] == 2 * WarehouseFloorScale.RunnerMass || bytes[1] == WarehouseFloorScale.Capacity;
                 case RaidEventKind.Crate:
                 case RaidEventKind.Bag:
                 case RaidEventKind.Result:
@@ -393,6 +408,8 @@ namespace HeavyPockets
         }
 
         public void Open() => Send(new[] { (byte)RaidCommand.Open });
+        public void SetWarehouseDoor(bool open) =>
+            Send(new[] { (byte)RaidCommand.SetWarehouseDoor, (byte)(open ? 1 : 0) });
         public void Close() => Send(new[] { (byte)RaidCommand.Close });
         public void EnterBase() => Send(new[] { (byte)RaidCommand.EnterBase });
         public void SetPouchLevel(byte level)

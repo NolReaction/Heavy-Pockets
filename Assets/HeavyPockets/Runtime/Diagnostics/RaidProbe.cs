@@ -813,9 +813,11 @@ namespace HeavyPockets
             Phase("both connected");
             yield return new WaitUntil(() => Exists("A.connected") && Exists("B.connected"));
             bool chartHouse = Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeChartHouse");
-            if (chartHouse || Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeSurfaces"))
+            bool warehouse = Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeWarehouse");
+            if (warehouse || chartHouse || Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-probeSurfaces"))
             {
-                yield return chartHouse ? CheckChartHouse() : CheckFreightSurfaces();
+                if (warehouse) yield return CheckWarehouse();
+                else yield return chartHouse ? CheckChartHouse() : CheckFreightSurfaces();
                 finished = true;
                 Signal("done");
                 Application.Quit(0);

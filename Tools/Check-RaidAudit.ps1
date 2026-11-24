@@ -34,6 +34,8 @@ function Read-Audit([string]$name) {
             $code = $bytes[0]
             $round = 0L
             $queued = $null
+            $doorOpen = $null
+            $scaleKilograms = $null
             $streamId = [long]$row.peer
             $expectedDirection = if (($name -eq 'server') -eq ($row.channel -eq 'event')) { 'tx' } else { 'rx' }
             Require ($row.direction -eq $expectedDirection) "$name invalid message direction"
@@ -141,6 +143,12 @@ function Read-Audit([string]$name) {
                 } elseif ($code -eq 11) {
                     Require ($bytes.Length -eq 2 -and $bytes[1] -in 1..4) "$name invalid base loadout event"
                     $pouchLevel = [int]$bytes[1]
+                } elseif ($code -eq 12) {
+                    Require ($bytes.Length -eq 2 -and $bytes[1] -in 0,1) "$name invalid warehouse door state"
+                    $doorOpen = [bool]$bytes[1]
+                } elseif ($code -eq 13) {
+                    Require ($bytes.Length -eq 2 -and $bytes[1] -in 0,75,150,200) "$name invalid scale reading"
+                    $scaleKilograms = [int]$bytes[1]
                 } else {
                     $length = @{ 1 = 31; 2 = 9; 6 = 6; 7 = 5; 8 = 5; 9 = 6 }[[int]$code]
                     Require ($null -ne $length -and $bytes.Length -eq $length) "$name unexpected public event fields"
@@ -215,12 +223,16 @@ function Read-Audit([string]$name) {
                             Require ($bytes[5] -in 0,1) "$name invalid readiness flag"
                             $queued = [int]$bytes[5]
                         }
+                    } elseif ($code -eq 13) {
+                        Require ($bytes.Length -eq 2 -and $bytes[1] -in 0,1) "$name invalid warehouse door request"
                     } else { Require ($code -in 2,3 -and $bytes.Length -eq 1) "$name unknown command" }
                 }
             }
             [pscustomobject]@{
                 sequence = $prior; direction = $row.direction; peer = [long]$row.peer
                 channel = $row.channel; payload = [string]$row.payload; code = $code
+                doorOpen = $doorOpen
+                scaleKilograms = $scaleKilograms
                 items = $items; types = $types; complete = $complete; status = $status; actor = $actor
                 instance = $instance; operation = $operation; shapes = $shapes; positions = $positions
                 pitch = $pitch; yaw = $yaw; mode = $mode; worldX = $worldX; worldZ = $worldZ
@@ -610,9 +622,9 @@ foreach ($role in 'A','B') {
         Require ($start.Count -eq 2 -and ($start.round -join ',') -ceq '1,2') "$label must enter each raid once"
         foreach ($round in 1,2) {
             $epoch = @($rows | Where-Object activeRound -eq $round)
-            $entry = @($epoch | Where-Object channel -eq 'event' | Select-Object -First 4)
-            Require (($entry.code -join ',') -ceq '8,1,10,4' -and $entry[1].actor -eq $peer -and
-                $entry[2].active -eq 1 -and $entry[3].items.Count -eq 0) "$label incorrect start sequence, equipment or initial bag"
+            $entry = @($epoch | Where-Object channel -eq 'event' | Select-Object -First 5)
+            Require (($entry.code -join ',') -ceq '8,12,1,10,4' -and $entry[1].doorOpen -eq $false -and
+                $entry[2].actor -eq $peer -and $entry[3].active -eq 1 -and $entry[4].items.Count -eq 0) "$label incorrect start sequence, door state, equipment or initial bag"
             $ack = @($epoch | Where-Object { $_.channel -eq 'command' -and $_.code -eq 8 })
             Require ($ack.Count -eq 1 -and $ack[0].round -eq $round -and $ack[0].sequence -gt $start[$round-1].sequence) "$label missing round acknowledgement"
             $beforeAck = @($epoch | Where-Object { $_.channel -eq 'command' -and $_.sequence -lt $ack[0].sequence })
@@ -622,7 +634,7 @@ foreach ($role in 'A','B') {
     # Compare each ordered direction separately. The simulation may still be sending movement
     # snapshots during process shutdown, so compare all discrete events and actions here.
     foreach ($channel in 'event','command') {
-        $included = if ($channel -eq 'event') { @(3,4,5,6,8,9,10,11) } else { @(2,3,4,5,6,7,8,9,10,11,12) }
+        $included = if ($channel -eq 'event') { @(3,4,5,6,8,9,10,11,12) } else { @(2,3,4,5,6,7,8,9,10,11,12,13) }
         $serverBytes = @($stream | Where-Object { $_.channel -eq $channel -and $_.code -in $included })
         $clientBytes = @($client | Where-Object { $_.channel -eq $channel -and $_.code -in $included })
         Require (($serverBytes.payload -join ',') -ceq ($clientBytes.payload -join ',')) "$role $channel bytes differ across round boundary"

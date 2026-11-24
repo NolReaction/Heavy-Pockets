@@ -7,6 +7,9 @@ namespace HeavyPockets
     internal sealed partial class RaidScenery
     {
         private Material shorePlants;
+        private static readonly int Walker = Shader.PropertyToID("_Walker");
+
+        internal void BendGroundcover(Vector3 feet) => shorePlants.SetVector(Walker, feet);
 
         private void BuildCoast()
         {
@@ -15,6 +18,8 @@ namespace HeavyPockets
             shorePlants = new Material(earth) { name = "Coastal vegetation and granite" };
             shorePlants.SetFloat("_Habitat", 1f);
             shorePlants.SetTexture("_Conifers", Resources.Load<Texture2D>("ShoreConifers"));
+            shorePlants.SetTexture("_Plants", Resources.Load<Texture2D>("QuaysidePlants"));
+            shorePlants.SetTexture("_Bark", Resources.Load<Texture2D>("QuaysideBark"));
             earth.SetTexture("_CoastColor", Resources.Load<Texture2D>("CoastRockColor"));
             earth.SetTexture("_CoastNormals", Resources.Load<Texture2D>("CoastRockNormals"));
             var sea = new Material(Resources.Load<Shader>("CoastalWater")) { name = "Tidal water" };

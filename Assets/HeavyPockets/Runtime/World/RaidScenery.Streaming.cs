@@ -113,6 +113,9 @@ namespace HeavyPockets
                     var instance = Object.Instantiate(prop.Prefab, tile.transform, false).transform;
                     instance.SetLocalPositionAndRotation(prop.Position, prop.Rotation);
                     instance.localScale *= prop.Scale;
+                    if (instance.TryGetComponent<WarehouseFloorScale>(out var scale)) FloorScale = scale;
+                    var door = instance.Find(ReceivingWarehouseLayout.DoorLeafName);
+                    if (door != null) door.gameObject.AddComponent<WarehouseDoor>();
                 }
             return tile;
         }

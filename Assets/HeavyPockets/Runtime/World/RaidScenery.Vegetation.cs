@@ -25,13 +25,45 @@ namespace HeavyPockets
                 return Vertices.Count - 1;
             }
 
-            internal int CardVertex(Vector3 point, Color tint, float u, float v)
+            // Vertex alpha selects the tree impostor (0), understory atlas (64), bark (128) or untextured mesh (255).
+            internal int CardVertex(Vector3 point, Color tint, float u, float v, byte surface = 0)
             {
                 if (CardUVs == null) CardUVs = new List<Vector2>(new Vector2[Vertices.Count]);
-                tint.a = 0f;
+                tint.a = surface / 255f;
                 int index = Vertex(point, tint);
                 CardUVs[index] = new Vector2(u, v);
                 return index;
+            }
+
+            internal void Spray(Vector3 start, Vector3 end, Vector3 wing, Vector3 fold, int column, Color tint)
+            {
+                // A folded card has two surface directions even when seen from directly above a shrub.
+                Vector3 sideRoot = wing * .56f;
+                Color shaded = tint * .74f;
+                float u = column * .25f;
+                int a = CardVertex(start - sideRoot, shaded, u, 0, 64);
+                int b = CardVertex(end - wing, tint, u, 1, 64);
+                int c = CardVertex(start + fold * .22f, shaded, u + .125f, 0, 64);
+                int d = CardVertex(end + fold, tint, u + .125f, 1, 64);
+                int e = CardVertex(start + sideRoot, shaded, u + .25f, 0, 64);
+                int f = CardVertex(end + wing, tint, u + .25f, 1, 64);
+                Triangle(a,b,d); Triangle(a,d,c); Triangle(c,d,f); Triangle(c,f,e);
+            }
+
+            internal void Bark(Vector3 start, Vector3 end, float baseRadius, float tipRadius, int sides)
+            {
+                float repeats = Vector3.Distance(start,end) * 1.3f;
+                int first = Vertices.Count;
+                for (int i = 0; i <= sides; i++)
+                {
+                    float fraction = i/(float)sides;
+                    Vector3 rim = Compass(fraction * 2f * Mathf.PI);
+                    CardVertex(start + rim * baseRadius, Rgb(0xb7b6ac), fraction, 0, 128);
+                    CardVertex(end + rim * tipRadius, Rgb(0xfff0d7), fraction, repeats, 128);
+                    if (i == 0) continue;
+                    int n = first + i*2;
+                    Triangle(n-2,n-1,n); Triangle(n,n-1,n+1);
+                }
             }
 
             internal void Triangle(int a, int b, int c)
@@ -123,7 +155,91 @@ namespace HeavyPockets
                         Rgb(0x515854), Rgb(0x969586), 8);
                 }
             }
+            for (int i = 0; i < YardPlanting.Trunks.Length; i++)
+            {
+                Bounds trunk = YardPlanting.Trunks[i];
+                Vector3 foot = new Vector3(trunk.center.x, -.035f, trunk.center.z);
+                var tile = bake.At(foot.x,foot.z);
+                float height = trunk.size.y * 1.36f;
+                BuildYardPine(tile.Woods, foot, height, trunk.extents.x, i * 2.4f);
+                BuildShelterTree(tile.Woodline, foot, height, i%4, i*2.4f, false);
+            }
+            BakeUndergrowth(bake);
             BakeMeadowPlants(bake);
+        }
+
+        private static void BuildYardPine(PlantMesh mesh, Vector3 foot, float height, float radius, float phase)
+        {
+            Vector3 shoulder = foot + Vector3.up * (height * .69f);
+            Vector3 top = foot + new Vector3(height * .025f, height, height * .013f);
+            mesh.Bark(foot, shoulder, radius, radius * .62f, 9);
+            mesh.Bark(shoulder, top, radius * .62f, .021f, 9);
+            Color needles = Rgb(0xe4e5cf);
+            for (int tier=0; tier<10; tier++)
+            {
+                float t = tier/10f;
+                float y = height * (.27f + t * .73f);
+                Vector3 hub = foot + Vector3.up*y + (top-foot-Vector3.up*height)*Mathf.Max(0f,(t-.58f)*1.8f);
+                int count = 8 - tier/2;
+                for (int branch=0; branch<count; branch++)
+                {
+                    float angle = phase + tier*2.4f + (branch + mesh.Range(-.15f,.15f))*2f*Mathf.PI/count;
+                    Vector3 outward = Compass(angle), across = new Vector3(-outward.z,0,outward.x);
+                    float reach = height * (.30f - t*.253f) * mesh.Range(.80f,1.11f);
+                    Vector3 joint = hub + outward*reach*.43f + Vector3.up*reach*.10f;
+                    Vector3 tip = hub + outward*reach + Vector3.up*reach*mesh.Range(-.14f,.20f);
+                    mesh.Stem(hub, joint, radius*.16f*(1f-t*.65f),Rgb(0x756951),4);
+                    Color tint = Color.Lerp(Rgb(0xa6b29a),needles,.23f + .56f*t + mesh.Range(0f,.19f));
+                    mesh.Spray(Vector3.Lerp(hub,joint,.32f),tip,across*reach*.36f,Vector3.up*reach*.30f,2,tint);
+                    for (int side=-1; side<=1; side+=2)
+                    {
+                        Vector3 spray = joint + (outward*.34f + across*(side*.27f) -
+                            Vector3.up*mesh.Range(.19f,.42f))*reach;
+                        Vector3 wing = (across*.13f + Vector3.up*(side*.23f))*reach;
+                        mesh.Spray(Vector3.Lerp(hub,joint,.62f),spray,wing,outward*reach*.12f,2,tint);
+                    }
+                }
+            }
+            mesh.Spray(top-Vector3.up*height*.11f,top,Vector3.right*height*.039f,Vector3.forward*height*.025f,2,needles);
+        }
+
+        private static void BakeUndergrowth(CellBake bake)
+        {
+            // Patches follow the rail verge, the shore path and the receiving yard. The loading apron stays clear.
+            Vector2[] patches = {
+                new Vector2(-29,11), new Vector2(-46,16), new Vector2(-28,26), new Vector2(-62,20),
+                new Vector2(-38,-31), new Vector2(-2,-26), new Vector2(23,13), new Vector2(57,-13),
+                new Vector2(35,-34), new Vector2(28,44), new Vector2(-16,43), new Vector2(-23,-10)
+            };
+            for (int p=0; p<patches.Length; p++)
+            {
+                var spacing = new PlantMesh(2719 + p*61);
+                for (int j=0; j<12; j++)
+                {
+                    float x=patches[p].x + spacing.Range(-4.4f,4.4f);
+                    float z=patches[p].y + spacing.Range(-3.2f,3.2f);
+                    if (!AllowsMeadow(x,z)) continue;
+                    var foot = new Vector3(x,CoastHeight(x,z)-.035f,z);
+                    var tile = bake.At(x,z);
+                    float h=spacing.Range(.38f, .98f), phase=spacing.Range(0f,6.28f);
+                    Color tint=Color.Lerp(Rgb(0xc8d3b5),Rgb(0xffedc4),spacing.Range(0,1));
+                    for(int sprig=0;sprig<7;sprig++)
+                    {
+                        Vector3 dir=Compass(phase+sprig*2.40f);
+                        Vector3 wing=new Vector3(-dir.z,0,dir.x)*h*.34f;
+                        Vector3 start=foot+dir*(h*.15f);
+                        Vector3 end=foot+(dir*spacing.Range(.32f,.74f)+Vector3.up*spacing.Range(.68f,1.0f))*h;
+                        tile.Woods.Spray(start,end,wing,(Vector3.up+dir)*h*.13f,1,tint);
+                    }
+                    // Small plants drop away with the detailed cell; taller shrubs keep crossed sprays on the horizon.
+                    if (h < .70f) continue;
+                    for(int side=0;side<2;side++)
+                    {
+                        Vector3 wing=Compass(phase+side*1.57f)*h*.76f;
+                        tile.Woodline.Spray(foot,foot+Vector3.up*h,wing,Vector3.zero,1,tint);
+                    }
+                }
+            }
         }
 
         private static void BuildShelterTree(PlantMesh mesh, Vector3 foot, float height,
@@ -162,6 +278,9 @@ namespace HeavyPockets
             Vector3 house = ChartHouseLayout.Origin;
             if (Mathf.Abs(x-house.x)<6.65f && Mathf.Abs(z-house.z)<4.7f ||
                 Mathf.Abs(x-house.x-2.6f)<1.3f && z > house.z-9f && z < house.z-3f) return false;
+            Bounds warehouse = OutdoorLayout.ReceivingWarehouse.Bounds;
+            if (Mathf.Abs(x-warehouse.center.x) < warehouse.extents.x + .9f &&
+                z > warehouse.min.z-3.5f && z < warehouse.max.z+.75f) return false;
             if (Mathf.Abs(x)<15.2f && Mathf.Abs(z+1f)<10.3f || Mathf.Abs(x-11f)<3.8f ||
                 Mathf.Abs(x-8f)<58.4f && Mathf.Abs(z-31f)<3.5f ||
                 Mathf.Abs(x-47f)<3.35f && Mathf.Abs(z-40f)<8.9f ||
@@ -185,38 +304,23 @@ namespace HeavyPockets
                     float x = scatter.Range(0f,RaidMap.RoomX-.9f) * (sector%2==0 ? -1f : 1f);
                     float z = scatter.Range(0f,RaidMap.RoomZ-.9f) * (sector<2 ? -1f : 1f);
                     if (!AllowsMeadow(x,z) || Meadow(x,z)<scatter.Range(.28f,.72f)) continue;
-                    Color baseTone = Color.Lerp(Rgb(0x535f3c),Rgb(0x838348),scatter.Range(0,1));
-                    Color tips = Color.Lerp(Rgb(0x858f54),Rgb(0xc0ad76),scatter.Range(0,1));
-                    bool reeds = scatter.Random.Next(8)==0;
-                    for (int tuft = 0; tuft < 5; tuft++)
+                    bool herbs = scatter.Random.Next(5) == 0;
+                    Color tint = Color.Lerp(Rgb(0xb9c9ae),Rgb(0xffedc3),scatter.Range(0,1));
+                    for (int tuft=0; tuft<6; tuft++)
                     {
-                        float tx = x+scatter.Range(-1.3f,1.3f), tz=z+scatter.Range(-.94f,.94f);
+                        float tx = x + scatter.Range(-1.6f,1.6f), tz = z + scatter.Range(-1.1f,1.1f);
                         if (!AllowsMeadow(tx,tz)) continue;
                         var mesh = bake.At(tx,tz).Sedge;
-                        var origin = new Vector3(tx,CoastHeight(tx,tz)-.02f,tz);
-                        int count = reeds ? 8 : 6;
-                        for (int blade = 0; blade < count; blade++)
+                        var basePoint = new Vector3(tx,CoastHeight(tx,tz)-.035f,tz);
+                        float h = herbs ? scatter.Range(.32f,.62f) : scatter.Range(.14f,.38f);
+                        float phase = scatter.Range(0f,6.28f);
+                        for (int side=0; side<3; side++)
                         {
-                            Vector3 outwards = Compass(scatter.Range(0,6.28f));
-                            Vector3 across = new Vector3(-outwards.z,0,outwards.x) * scatter.Range(.021f,.043f);
-                            float h = reeds ? scatter.Range(.37f,.65f) : scatter.Range(.18f,.39f);
-                            Vector3 start = origin + outwards * scatter.Range(.02f,.13f);
-                            Vector3 middle = start + Vector3.up*(h*.62f) + outwards*(h*.22f);
-                            Vector3 end = start + Vector3.up*h + outwards*(h*.50f);
-                            int a = mesh.Vertex(start - across,baseTone);
-                            int b = mesh.Vertex(start + across,baseTone);
-                            int c = mesh.Vertex(middle + across*.64f,tips);
-                            int d = mesh.Vertex(middle - across*.64f,tips);
-                            int e = mesh.Vertex(end,tips);
-                            mesh.Triangle(a,b,c); mesh.Triangle(a,c,d); mesh.Triangle(d,c,e);
-                            if (reeds && blade<2)
-                            {
-                                Vector3 head = end - outwards*.025f;
-                                int s = mesh.Vertex(head - across*.5f,Rgb(0xa19768));
-                                int t = mesh.Vertex(head + across*.5f,Rgb(0xbdb084));
-                                int u = mesh.Vertex(head + Vector3.up*.085f + outwards*.055f,Rgb(0xcabe91));
-                                mesh.Triangle(s,t,u);
-                            }
+                            Vector3 outwards=Compass(phase + side*2.08f);
+                            Vector3 across=new Vector3(-outwards.z,0,outwards.x);
+                            Vector3 start=basePoint+outwards*h*.09f;
+                            Vector3 tip=start+(Vector3.up + outwards * scatter.Range(.17f,.52f))*h;
+                            mesh.Spray(start,tip,across*h*(herbs?.44f:.68f),outwards*h*.15f,herbs?3:0,tint);
                         }
                     }
                 }

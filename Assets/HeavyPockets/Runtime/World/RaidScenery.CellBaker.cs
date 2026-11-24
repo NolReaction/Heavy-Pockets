@@ -82,6 +82,9 @@ namespace HeavyPockets
                     if (solid.Kind == OutdoorKind.Container) ++serial;
                 }
                 bake.PlaceWarehouse("DockWarehouse/ReceivingWarehouse", OutdoorLayout.ReceivingWarehouse.Bounds);
+                var warehouse = OutdoorLayout.ReceivingWarehouse.Bounds.center;
+                bake.At(warehouse.x, warehouse.z).Place("DockWeighing/FloorScale", WarehouseFloorScale.Position,
+                    Quaternion.identity);
                 bake.PlaceWarehouse("DockWarehouse/QuayWorkshop", OutdoorLayout.QuayWorkshop.Bounds);
                 var houseTile = bake.At(ChartHouseLayout.Origin.x, ChartHouseLayout.Origin.z);
                 houseTile.Place("ChartRadio/ChartRadio", ChartHouseLayout.Origin + ChartHouseLayout.RadioPosition,
@@ -178,6 +181,12 @@ namespace HeavyPockets
             if (source.CardUVs != null) mesh.SetUVs(0, source.CardUVs);
             mesh.SetTriangles(source.Triangles,0);
             mesh.RecalculateNormals();
+            if (source.CardUVs != null)
+            {
+                var bounds = mesh.bounds;
+                bounds.Expand(.9f);
+                mesh.bounds = bounds;
+            }
             SaveMesh(surfaces,mesh,"Coastal vegetation and granite",casts,path);
         }
 

@@ -18,8 +18,8 @@ namespace HeavyPockets
         public const float CrateZ = 0.36f;
         public const float ExitX = 1.15f;
         public const float ExitZ = 1f;
-        private const float PlayerRadius = 0.30f;
-        internal const float StandingHeight = 1.80f;
+        internal const float PlayerRadius = 0.30f;
+        internal const float StandingHeight = 1.75f;
         public const float Reach = 2.45f;
 
         // Occluders follow the rendered partition, its cap, raised face details and the cargo case.
@@ -120,6 +120,9 @@ namespace HeavyPockets
 
         private static bool Blocked(Vector2 p, float feet, float top)
         {
+            Bounds door = WarehouseDoor.LeafBounds;
+            // The four-centimetre sweep under the leaf is also solid to footprint-only route queries.
+            if (door.max.y > feet + ContactTolerance && TouchesFootprint(door, p)) return true;
             foreach (Bounds box in Nearby(p))
                 if (box.max.y > feet + ContactTolerance && box.min.y < top - ContactTolerance &&
                     TouchesFootprint(box, p)) return true;
@@ -135,7 +138,8 @@ namespace HeavyPockets
         // cannot become a landing surface until the feet have actually cleared it.
         internal static float FloorBelow(Vector2 p, float feet)
         {
-            float floor = 0f;
+            Bounds door = WarehouseDoor.LeafBounds;
+            float floor = door.max.y <= feet + ContactTolerance && TouchesFootprint(door, p) ? door.max.y : 0f;
             foreach (Bounds box in Nearby(p))
             {
                 float top = box.max.y;
@@ -148,7 +152,9 @@ namespace HeavyPockets
 
         internal static float CeilingAbove(Vector2 p, float head)
         {
-            float ceiling = float.PositiveInfinity;
+            Bounds door = WarehouseDoor.LeafBounds;
+            float ceiling = door.min.y >= head - ContactTolerance && TouchesFootprint(door, p)
+                ? door.min.y : float.PositiveInfinity;
             foreach (Bounds box in Nearby(p))
             {
                 float bottom = box.min.y;
@@ -208,7 +214,7 @@ namespace HeavyPockets
                 && ClipAxis(local.z, direction.z, half.z, ref first, ref length);
         }
 
-        // Points inset from the core silhouette of the 1.76 m Unity Armature.
+        // Points inset from the core silhouette of the standing runner.
         // Moving limbs are excluded from the visibility test while the animation is blending.
         private static readonly Vector3[] TorsoSamples =
         {

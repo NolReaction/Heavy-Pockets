@@ -4,6 +4,9 @@ Shader "HeavyPockets/CoastalGround"
     {
         _Habitat ("Material type", Float) = 0
         _Conifers ("Coastal conifer cutouts", 2D) = "white" {}
+        _Plants ("Grass, scrub and pine sprays", 2D) = "white" {}
+        _Bark ("Yard pine bark", 2D) = "white" {}
+        _Walker ("Runner's feet", Vector) = (0,-100,0,0)
         _Cutoff ("Canopy coverage", Range(0,1)) = .32
         _Grain ("Surface detail", 2D) = "gray" {}
         _CoastColor ("Rock, gravel and moss", 2D) = "gray" {}
@@ -17,7 +20,8 @@ Shader "HeavyPockets/CoastalGround"
         #pragma target 3.0
         #pragma surface surf HarborDiffuse fullforwardshadows addshadow alphatest:_Cutoff vertex:vert
         #include "HarborSurfaceLighting.cginc"
-        sampler2D _Grain, _CoastColor, _CoastNormals, _Conifers;
+        sampler2D _Grain, _CoastColor, _CoastNormals, _Conifers, _Plants, _Bark;
+        float4 _Walker;
         half _Habitat, _HarborPoster, _HarborDusk;
         half4 _HarborLandColor, _HarborGrassColor;
         struct Input
@@ -31,7 +35,25 @@ Shader "HeavyPockets/CoastalGround"
         {
             UNITY_INITIALIZE_OUTPUT(Input, data);
             data.cardUV = v.texcoord.xy;
-            if (_Habitat > .5 && v.color.a < .125) v.normal = float3(0,1,0);
+            if (_Habitat > .5 && v.color.a < .375)
+            {
+                float3 world = mul(unity_ObjectToWorld,v.vertex).xyz;
+                float tip = saturate(v.texcoord.y);
+                float phase = _HarborWindOffset.w + dot(world.xz,float2(.19,.28));
+                float wave = sin(phase) + .23*sin(phase*3 + world.x*.49);
+                float flex = v.color.a < .125 ? .22 : .093;
+                float2 offset = float2(.86,.51) * wave * flex * tip * tip * _HarborWindOffset.z;
+                if (v.color.a > .125 && (v.texcoord.x < .5 || v.texcoord.x >= .75))
+                {
+                    float2 delta = world.xz - _Walker.xz;
+                    float reach = saturate(1.0 - length(delta)/.70)
+                        * saturate(1.0 - abs(world.y - _Walker.y - .24));
+                    offset += delta * (reach * tip * 1.15);
+                    v.vertex.y -= reach * tip * .095;
+                }
+                v.vertex.xz += offset;
+                v.normal = normalize(float3(v.normal.x*.32,1,v.normal.z*.32));
+            }
             float3 n = normalize(v.normal);
             float3 axis = abs(n.x) < .96 ? float3(1,0,0) : float3(0,0,1);
             v.tangent = float4(normalize(axis - n * dot(axis,n)), -1);
@@ -73,6 +95,16 @@ Shader "HeavyPockets/CoastalGround"
                     fixed4 tree = tex2D(_Conifers, i.cardUV);
                     color *= tree.rgb;
                     o.Alpha = tree.a;
+                }
+                else if (i.color.a < .375)
+                {
+                    fixed4 foliage = tex2D(_Plants, i.cardUV);
+                    color *= foliage.rgb;
+                    o.Alpha = foliage.a;
+                }
+                else if (i.color.a < .625)
+                {
+                    color *= tex2D(_Bark, i.cardUV).rgb;
                 }
                 // The foliage palette follows the same pigment shift as the meadow.
                 color = lerp(color, color * half3(.75,1.02,1.12), _HarborDusk * .65);

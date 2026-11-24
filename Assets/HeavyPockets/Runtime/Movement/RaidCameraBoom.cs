@@ -43,7 +43,7 @@ namespace HeavyPockets
         internal const float MinAspect = .25f, MaxAspect = 3.6f;
         internal const float ShoulderSeconds = .34f;
         internal const byte CenterSample = 127, LastSample = 254;
-        internal static Vector3 Eye(Vector2 ground) => new Vector3(ground.x, 1.58f, ground.y);
+        internal static Vector3 Eye(Vector2 ground) => new Vector3(ground.x, RaidMap.StandingHeight - .12f, ground.y);
 
         // Phase runs from left (0) to right (1). Changing direction keeps the current
         // phase; the eased position has zero speed at either end of the travel.

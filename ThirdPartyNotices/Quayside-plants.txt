@@ -1,0 +1,18 @@
+Quayside vegetation
+
+The pine sprays and bark are derived from Pine Tree 01 by Poly Haven.
+https://polyhaven.com/a/pine_tree_01
+https://polyhaven.com/license
+
+Grass and herb clumps use grassbushcc008 and grassbushcc007 from Stylized Grass
+and Bush Textures by FabinhoSC. The shrub sprigs use Stylized branches Texture
+by the same author.
+https://opengameart.org/content/stylized-grass-and-bush-textures-0
+https://opengameart.org/content/stylized-branches-texture
+
+All three sources are CC0 1.0 Universal.
+https://creativecommons.org/publicdomain/zero/1.0/
+
+The port uses cropped, recolored and layered foliage in a 1024 x 512 atlas
+with transparent margins and coverage-preserving mipmaps. Bark is a separate
+tiling 512 px texture. Distant tree silhouettes use Shore-conifers.txt.
